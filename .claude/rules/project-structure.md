@@ -52,6 +52,7 @@ The Phase 0 probe (`hook/SidearmModule.kt`, `hook/GestureLauncherTargets.kt`) is
 | Verified framework signatures per build | `docs/hook-targets.md` |
 | Device test matrix, SOS procedure, post-OTA checklist | `docs/testing.md` (from Phase 3) |
 | Install, requirements, safety and recovery for users | `README.md` |
+| Our license; third-party licenses and notices | `LICENSE` (GPL-3.0-or-later); `THIRD_PARTY_NOTICES.md` |
 | Release notes | `CHANGELOG.md` (from Phase 5, in Keep a Changelog format) |
 | Dev and repo scripts | `scripts/*.sh`: bash, kebab-case names, a header comment with usage |
 | Git hooks | `.githooks/` |

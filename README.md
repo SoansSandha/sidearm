@@ -4,6 +4,13 @@ Triple-press the power button to open an app of your choice, on a rooted Google 
 
 > **Status: in development.** Phase 0 is done: the hook targets are verified on Android 17 QPR1, and a log-only probe runs in system_server. The feature itself isn't built yet. See [docs/plan.md](docs/plan.md).
 
+> [!WARNING]
+> **Read this before installing anything from this repo.**
+> - Sidearm runs inside `system_server`, Android's core process, and changes how the power button behaves. That is the same button that triggers **Emergency SOS**.
+> - Development builds are unfinished. Don't put one on a phone you rely on for emergencies.
+> - Whenever you install or update it, test Emergency SOS by hand (start the countdown, then cancel it) and know the recovery steps below.
+> - It's provided as is, with no warranty (see [LICENSE](LICENSE)). You use it at your own risk.
+
 ## What it does
 
 | Presses | Result |
@@ -65,4 +72,8 @@ The first install needs Sidearm enabled in the Vector manager for "System Framew
 
 ## License
 
-No license has been chosen yet. The code is all rights reserved, so it may not be copied or redistributed. See [docs/plan.md](docs/plan.md) §9.
+Copyright (C) 2026 SoansSandha.
+
+Sidearm is free software. You can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE), version 3 or (at your option) any later version (`GPL-3.0-or-later`). It comes with no warranty.
+
+Third-party material in this repo keeps its own license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

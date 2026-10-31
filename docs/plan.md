@@ -149,11 +149,12 @@ Target layout. A phase in brackets means the item doesn't exist yet.
 
 ```
 sidearm/
-├─ README.md                  # [before first push] what it is, requirements, install, safety, recovery, build
+├─ README.md                  # what it is, safety warning, requirements, install, recovery, build
 ├─ CHANGELOG.md               # [Phase 5] Keep a Changelog, one entry per tagged release
-├─ LICENSE                    # [before ever going public] see §9
+├─ LICENSE                    # GPL-3.0-or-later (see §9)
+├─ THIRD_PARTY_NOTICES.md     # licenses of copied or referenced third-party material (ECC's MIT notice)
 ├─ CLAUDE.md                  # Claude's project instructions (imports .claude/private/environment.md)
-├─ .editorconfig              # [before first push] LF, indentation, Kotlin style (ktlint reads it)
+├─ .editorconfig              # LF, indentation, Kotlin style (ktlint reads it)
 ├─ .gitattributes .gitignore .gitmodules
 ├─ settings.gradle.kts        # module list; [Phase 1] includeBuild("build-logic")
 ├─ build.gradle.kts           # root: plugin declarations only; [Phase 1] Spotless
@@ -184,13 +185,14 @@ Structure work by phase. It's spread out so each piece arrives when it first pay
 
 | When | Structure work |
 |---|---|
-| Before the first push | `README.md`, `.editorconfig`, `.claude/rules/project-structure.md` |
+| Before the first push ✅ | `README.md`, `.editorconfig`, `.claude/rules/project-structure.md` |
+| Before going public ✅ | `LICENSE`, `THIRD_PARTY_NOTICES.md`, the README safety warning, the public-repo rules (fork PRs, untrusted contributions, GitHub settings) |
 | Phase 1 | `build-logic` with the three convention plugins; `:core`; Spotless + ktlint; Kover; SDK levels in the catalog; `./gradlew check` running everything |
 | Phase 2 | Reshape `:hook` into `intercept/`, `target/`, `effect/` and `config/` as the probe is replaced; `:app` takes `runtimeOnly(project(":hook"))`; `docs/architecture.md`; first ADRs extracted from §3.6 and §9 |
 | Phase 3 | `docs/testing.md` (§6 moves there); `scripts/device-smoke.sh` |
 | Phase 4 | `:app` `ui/` and `data/` packages; Compose configured in the application convention plugin |
 | Phase 5 | `.github/` (CI running `./gradlew check` and the hygiene check, release workflow, Dependabot for Gradle and Actions, but not the ECC submodule, PR template); `CHANGELOG.md`; release versioning |
-| Before ever going public | `LICENSE`, README polish, the GitHub settings in the rules (§9) |
+| When flipping to public | The GitHub settings in the rules' §9: secret scanning, push protection, Dependabot alerts, a ruleset on `main` |
 
 Deliberately left out, because the project is too small to need them: feature or `:core:*` sub-modules, a DI framework, product flavors, instrumented tests, and a hidden-API stub module (reflection is centralised in `hook/target/` instead; add one only if that outgrows itself).
 
@@ -259,7 +261,7 @@ Wallet as the double-press action, different apps for different presses, per-use
 1. ~~Name and `applicationId`~~. **Decided:** Sidearm, `io.github.soanssandha.sidearm`.
 2. ~~SOS guard~~. **Decided:** don't build it unless the Phase 3 SOS test shows the app or the unlock prompt covering the SOS countdown. SOS fires either way. With the guard, nothing flashes, but every triple gains 300 ms.
 3. **Cancelled unlock prompt.** Recommended: do nothing; this is SystemUI's default with `dismissKeyguardToLaunch`.
-4. **License.** No license is needed while the repo is private; without one, it's all rights reserved by default. Pick one before ever making it public. LSPosed modules commonly use GPL-3.0; libxposed itself is Apache-2.0. Hooking through the `compileOnly` API doesn't force either choice.
+4. ~~License~~. **Decided:** GPL-3.0-or-later (`LICENSE`), the norm for LSPosed modules (Vector itself is GPL-3.0). Third-party notices, including ECC's MIT notice for the copies in `.claude/`, are in `THIRD_PARTY_NOTICES.md`.
 
 ## 10. Recovery
 
