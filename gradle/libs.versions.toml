@@ -1,0 +1,13 @@
+[versions]
+agp = "9.5.0"
+kotlin = "2.4.21"
+libxposed = "102.0.0"
+
+[libraries]
+libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+# Puts this KGP on the build classpath, so AGP's built-in Kotlin compiles with it too.
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

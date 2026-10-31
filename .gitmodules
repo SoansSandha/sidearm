@@ -1,0 +1,4 @@
+[submodule "third_party/ecc"]
+	path = third_party/ecc
+	url = https://github.com/affaan-m/ECC.git
+	shallow = true

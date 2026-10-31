@@ -1,0 +1,93 @@
+# Rules behind this file: .claude/rules/git-and-privacy.md
+
+# Gradle / Android Studio / editors
+.gradle/
+.kotlin/
+build/
+local.properties
+/captures/
+.externalNativeBuild/
+.cxx/
+.idea/
+*.iml
+*.iws
+.vscode/
+.history/
+*.swp
+*.orig
+*.rej
+*.bak
+*.tmp
+
+# Build artifacts (releases go to GitHub Releases, never into git)
+*.apk
+*.aab
+*.apks
+*.idsig
+*.dex
+mapping.txt
+
+# Signing and secrets
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.pk8
+keystore.properties
+signing.properties
+.env
+.env.*
+*.secret
+*.secrets
+google-services.json
+
+# Personal notes, device details and the privacy denylist (stay on this PC)
+.claude/private/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Device output and media that carry personal data (app icons must be vector XML, not images)
+*.log
+*.logcat
+*logcat*
+*dumpsys*
+*getprop*
+bugreport*
+tombstone*
+anr_*
+*.hprof
+*.pcap
+*.pcapng
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.heic
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.pdf
+/screenshots/
+/recordings/
+
+# Pulled or decompiled framework code
+services.jar
+framework.jar
+*.smali
+/jadx-out/
+
+# JVM crash files
+hs_err_pid*
+replay_pid*
+
+# OS
+.DS_Store
+Thumbs.db

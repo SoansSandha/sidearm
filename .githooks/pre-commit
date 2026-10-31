@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Runs the repo hygiene check on what's about to be committed. Enable once per clone with:
+#   git config core.hooksPath .githooks
+exec bash "$(git rev-parse --show-toplevel)/scripts/check-repo-hygiene.sh"
