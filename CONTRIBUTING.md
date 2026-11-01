@@ -22,7 +22,7 @@ develop  ----------o----o----o----o--------o----------------o---
 | `hotfix/…` | `main` | `main`, then `main` is merged back into `develop` | Merge commit | Until the patch release is tagged |
 | `spike/…` | `develop` | Never | | A throwaway experiment, like the Phase 0 probe. Write up the findings through a `docs/` branch, then delete it. |
 
-Nobody commits to `main` or `develop` directly. They change only through pull requests, and the pre-push hook refuses direct pushes to them.
+Nobody commits to `main` or `develop` directly. They change only through pull requests: the pre-push hook refuses direct pushes to them, and so do GitHub's rulesets.
 
 ## Branch names
 
@@ -45,6 +45,7 @@ The script stops unless the worktree is clean. It then fetches, fast-forwards `d
 
 - Name the branch after what the task is about to do. More work on the same task stays on its branch, and a task that changes no files needs no branch.
 - Claude runs the script on its own when a new task begins and the worktree is clean. If there are uncommitted changes, it asks first (rules §1).
+- GitHub deletes merged branches, but local copies stay. When the branch you're leaving is already on `develop`, the script says so and gives the `git branch -D` command; deleting it is still the owner's call.
 
 If the work grows past the branch's name, for example a fix that turned into a feature or a second related change, rename the branch so the name still describes it. If the new part could ship on its own, a separate branch is usually better, since each PR covers one concern. Claude proposes the new name or the split and waits for the owner's OK before renaming.
 
@@ -171,10 +172,10 @@ To bring a branch up to date with `develop`: if it has never been pushed, rebase
 |---|---|
 | Commit header format | commit-msg hook → `scripts/check-conventions.sh` |
 | Branch and tag names; no direct pushes to `main` or `develop`; tags annotated and on `main` | pre-push hook → `scripts/check-conventions.sh` |
-| No secrets or personal data | `scripts/check-repo-hygiene.sh`, from all three hooks |
-| `develop` can't be deleted, so auto-delete skips it after a release PR | The "Keep develop" ruleset on GitHub |
+| No secrets or personal data | `scripts/check-repo-hygiene.sh`, from all three hooks. GitHub's secret scanning and push protection are a backstop for secrets. |
+| `main` and `develop` change only through PRs, with the merge methods above, and can't be force-pushed or deleted (so auto-delete skips `develop`) | The "Protect main" and "Protect develop" rulesets on GitHub (rules §9) |
+| Release tags can't be moved or deleted | The "Protect release tags" ruleset |
 | Only squash and merge commits on the merge button | Repo settings (rebase merging is off) |
-| Changes to `main` and `develop` only through PRs, and no force-push | The rulesets suggested in rules §9, which aren't on yet. Until then, the pre-push hook. |
 | PR title format, and checks on every PR | CI, from Phase 5 |
 
 Turn the hooks on once per clone with `bash scripts/setup-repo.sh`.
