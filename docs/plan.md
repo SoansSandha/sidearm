@@ -1,6 +1,6 @@
 # Implementation plan: Sidearm (triple-press launcher)
 
-App name **Sidearm**, applicationId `io.github.soanssandha.sidearm`. Written 2026-10-29. The ECC `architect` agent reviewed it against the Android 17 source the same day; review fixes are included. Phase 0 finished the same day, and its findings are folded in below (see also `docs/hook-targets.md`).
+App name **Sidearm**, applicationId `io.github.soanssandha.sidearm`. Written 2026-10-29. The ECC `architect` agent reviewed it against the Android 17 source the same day; review fixes are included. Phase 0 finished the same day, and its findings are folded in below (see also `docs/hook-targets.md`). Phase 1 finished 2026-10-30.
 
 ## 1. Behaviour contract
 
@@ -64,23 +64,28 @@ Inlining: ART may have compiled `handleCameraGesture` inline into `interceptPowe
 
 ### 3.2 State machine (pure Kotlin, in `:core`)
 
-All decisions live in a pure reducer, `(State, Event) -> (State, List<Effect>)`, which uses no Android or Xposed types. The hook layer only turns calls into events and runs the effects. The reducer is tested exhaustively on the JVM with a fake clock.
+All decisions live in a pure reducer, `reduce(state, event, config, timing) -> Transition(state, effects)` in `:core` (`core.sequencer`), which uses no Android or Xposed types. `config` is the current settings snapshot and `timing` holds `W` and `G`. The hook layer only turns calls into events and runs the effects. `ReduceTest` has one test per row below; `ReduceTimingTest` plays whole press sequences on a fake clock, with a fake of stock's tap counting.
 
-States: `Idle(lastFlushAt)`, `HoldingCamera(args, deadline, generation)`.
+States: `Idle(lastFlushedPress)`, `HoldingCamera(camera, pressTime, deadline, generation)`. "Armed" means enabled with a valid target.
 
 | State | Event | Condition | Next | Effects |
 |---|---|---|---|---|
-| Idle | CameraRequested(t2) | enabled, valid target | HoldingCamera | Schedule(t2 + W + G); tell stock "launched" |
+| Idle | CameraRequested(t2) | armed | HoldingCamera | Schedule(t2 + W + G); tell stock "launched" |
 | Idle | CameraRequested | otherwise | Idle | Run stock now |
-| HoldingCamera | PowerDown(taps = 3) | | Idle | Cancel timer; ConsumePress; WakeIfAsleep; LaunchTarget |
-| HoldingCamera | Timer(gen matches) | | Idle(now) | RunHeldCamera |
-| HoldingCamera | PowerDown(anything else) | late or unexpected press | Idle(now) | RunHeldCamera, then stock handles this press |
-| HoldingCamera | ConfigChanged(disabled) / unload / hot reload | | Idle(now) | RunHeldCamera |
-| Idle | PowerDown(taps = 3) | within G of `lastFlushAt` | Idle | ConsumePress. The camera is already opening; this only stops a screen toggle. |
+| Idle | PowerDown(taps = 3) | less than W after `lastFlushedPress` | Idle | ConsumePress, whatever the config. The held camera is already opening (the timer won the race, or the feature was turned off mid-hold); this only stops a screen toggle. No wake: the camera launch wakes the device. |
+| Idle | anything else | | Idle | none: stock handles the press |
+| HoldingCamera | PowerDown of press 2 itself | event time = `pressTime` | unchanged | none. Stock asks for the camera *during* press 2, so press 2 reaches the reducer after the hold began. |
+| HoldingCamera | PowerDown(taps = 3) | still armed | Idle | Cancel timer; ConsumePress; WakeDevice if not interactive; LaunchTarget (with the held camera as fallback) |
+| HoldingCamera | Timer(gen matches) | | Idle(t2) | RunHeldCamera |
+| HoldingCamera | PowerDown(anything else), or taps = 3 when no longer armed | late or unexpected press | Idle(t2) | Cancel timer; RunHeldCamera; stock handles this press |
+| HoldingCamera | ConfigChanged(not armed) / Released (unload, hot reload) | | Idle(t2) | Cancel timer; RunHeldCamera |
+| HoldingCamera | ConfigChanged(still armed) | | unchanged | none. Press 3 opens whatever target is set at that moment. |
+| HoldingCamera | CameraRequested | shouldn't happen | Idle(t2) | Cancel timer; RunHeldCamera; run stock now |
 | any | Timer(stale gen) | | unchanged | none |
 
 - `W` is read from stock's `POWER_DOUBLE_TAP_MAX_TIME_MS` by reflection, with 300 as the fallback. `G` is a 50 ms grace period.
 - Stock counts press 3 by its *event time*, but our hook only sees the event a few milliseconds later. Without `G`, a press at t2+295 that we handle at t2+303 would lose to the timer.
+- `lastFlushedPress` records *which* press 2 the camera came from, not when it ran. A counted press 3 always has an event time before the deadline, so comparing it with the flush time could never match; comparing it with press 2 works however late the hook sees press 3.
 - Deadlines use the key event's uptime clock: `Handler.postAtTime(r, token, deadline)`.
 
 Concurrency: key events arrive on the input thread and timers fire on a handler thread. The reducer runs under one lock and is cheap. Generation numbers make a timer that lost a race into a no-op. Effects run *after* the lock is released. Never hold it while calling `proceed()` or the original method.
@@ -156,13 +161,13 @@ sidearm/
 ├─ CLAUDE.md                  # Claude's project instructions (imports .claude/private/environment.md)
 ├─ .editorconfig              # LF, indentation, Kotlin style (ktlint reads it)
 ├─ .gitattributes .gitignore .gitmodules
-├─ settings.gradle.kts        # module list; [Phase 1] includeBuild("build-logic")
-├─ build.gradle.kts           # root: plugin declarations only; [Phase 1] Spotless
+├─ settings.gradle.kts        # module list; includeBuild("build-logic")
+├─ build.gradle.kts           # root: plugin declarations and Spotless only
 ├─ gradle.properties
-├─ gradle/libs.versions.toml  # every version, including SDK levels [Phase 1]
-├─ build-logic/               # [Phase 1] convention plugins: sidearm.android.application,
+├─ gradle/libs.versions.toml  # every version, including SDK levels and the JVM target
+├─ build-logic/               # convention plugins: sidearm.android.application,
 │                             #   sidearm.android.library, sidearm.jvm.library
-├─ core/                      # [Phase 1] pure Kotlin: press sequencer + config contract
+├─ core/                      # pure Kotlin: press sequencer + config contract
 ├─ hook/                      # system_server code: entry, intercept/, target/, effect/, config/ [Phase 2]
 ├─ app/                       # the APK: packaging, META-INF/xposed, [Phase 4] config UI (ui/, data/)
 ├─ docs/
@@ -187,8 +192,8 @@ Structure work by phase. It's spread out so each piece arrives when it first pay
 |---|---|
 | Before the first push ✅ | `README.md`, `.editorconfig`, `.claude/rules/project-structure.md` |
 | Before going public ✅ | `LICENSE`, `THIRD_PARTY_NOTICES.md`, the README safety warning, the public-repo rules (fork PRs, untrusted contributions, GitHub settings) |
-| Phase 1 | `build-logic` with the three convention plugins; `:core`; Spotless + ktlint; Kover; SDK levels in the catalog; `./gradlew check` running everything |
-| Phase 2 | Reshape `:hook` into `intercept/`, `target/`, `effect/` and `config/` as the probe is replaced; `:app` takes `runtimeOnly(project(":hook"))`; `docs/architecture.md`; first ADRs extracted from §3.6 and §9 |
+| Phase 1 ✅ | `build-logic` with the three convention plugins; `:core`; Spotless + ktlint; Kover; SDK levels in the catalog; `./gradlew check` running everything; `:app` takes `runtimeOnly(project(":hook"))` (moved up from Phase 2) |
+| Phase 2 | Reshape `:hook` into `intercept/`, `target/`, `effect/` and `config/` as the probe is replaced; `docs/architecture.md`; first ADRs extracted from §3.6 and §9 |
 | Phase 3 | `docs/testing.md` (§6 moves there); `scripts/device-smoke.sh` |
 | Phase 4 | `:app` `ui/` and `data/` packages; Compose configured in the application convention plugin |
 | Phase 5 | `.github/` (CI running `./gradlew check` and the hygiene check, release workflow, Dependabot for Gradle and Actions, but not the ECC submodule, PR template); `CHANGELOG.md`; release versioning |
@@ -211,10 +216,10 @@ After each phase, run the ECC `code-reviewer` and `kotlin-reviewer` agents on th
 | # | Phase | Deliverables | Exit criteria |
 |---|---|---|---|
 | 0 ✅ | Decide and verify (done 2026-10-29) | Sidearm / `io.github.soanssandha.sidearm`. Device jars checked with `dexdump` (no jadx needed) and recorded in `docs/hook-targets.md`. Scope `system`, the PWM route, and `ExceptionMode` all confirmed. A log-only probe in `:hook` verified them on a device. | Met: the probe logs taps 1/2/3 and `handleCameraGesture(false, 1)` from inside system_server. Hot reload works when versionCode changes (`scripts/dev-install.sh`). `input keyevent` presses do go through GestureLauncherService (`device=-1`). |
-| 1 | Build conventions + core reducer (TDD; `kotlin-testing` skill, `tdd-guide` agent) | First, the `build-logic` convention plugins, Spotless + ktlint, Kover and `./gradlew check` (§4). Then `:core`, with every row of §3.2 as a test, plus timing edges (295/299/300/349/351 ms), timer races, flush paths, and the config contract and its validation. | `./gradlew check` is green; Kover ≥ 80% on `:core` (aim for 95%, since the code is pure) |
+| 1 ✅ | Build conventions + core reducer, test-first (done 2026-10-30) | First, the `build-logic` convention plugins, Spotless + ktlint, Kover and `./gradlew check` (§4). Then `:core`, with every row of §3.2 as a test, plus timing edges (295/299/300/349/351 ms), timer races, flush paths, and the config contract and its validation. | Met: `./gradlew check` is green (formatting, lint on `:app` and `:hook`, tests, Kover gate). `:core` has 58 tests and 100% line and branch coverage; both gates are 80%. |
 | 2 | Hook glue: dry run, then camera | `:hook` reshaped into its target packages (§4). Target resolvers with feature detection. The interceptors first run in **dry-run** mode, logging what they would do and always proceeding with stock, then for real with unlocked-phone launches only. `docs/architecture.md` and the first ADRs. | A few dozen real 1/2/3 presses match the dry-run logs. On real runs: triple opens the app unlocked, double opens the camera about 350 ms later, and single is unchanged. |
 | 3 | Lock screen and SOS | `dismissKeyguardToLaunch` flow, wake on press 3, the full matrix. `docs/testing.md` and `scripts/device-smoke.sh`. | Matrix passes, including the manual SOS check with the phone locked and face unlock on |
-| 4 | Config app | Compose screen in `ui/`, service client and app listing in `data/`, remote prefs through the `:core` config contract, status line, app picker | Toggling the feature or changing the target takes effect live with no reboot. `dumpsys` shows no background components. |
+| 4 | Config app | **Design first:** study a few well-regarded Android apps (system settings, utilities, and other root or module managers) to work out what makes a good Android app, then present **3 distinct design variants** to the owner. Build only the variant the owner picks. Then: Compose screen in `ui/`, service client and app listing in `data/`, remote prefs through the `:core` config contract, status line, app picker | The owner has picked a design variant. Toggling the feature or changing the target takes effect live with no reboot. `dumpsys` shows no background components. |
 | 5 | CI and release | GitHub Actions on push and PR runs `./gradlew check`, the hygiene check and `assembleRelease`, and uploads a signed APK artifact. A tag creates a release with notes from `CHANGELOG.md`. Dependabot for Gradle and Actions; a PR template with the pre-flight checklist. The keystore lives in Actions secrets and a password manager. | A green run on `main` produces an installable signed APK |
 | 6 | Soak | Daily use for 1–2 weeks, plus the post-OTA checklist (§6) | No missed or false triggers, and no SOS regression |
 

@@ -2,7 +2,7 @@
 
 Triple-press the power button to open an app of your choice, on a rooted Google Pixel 9 Pro XL running Android 17. Sidearm is an LSPosed-style module for the [Vector](https://github.com/JingMatrix/Vector) framework (libxposed API 102).
 
-> **Status: in development.** Phase 0 is done: the hook targets are verified on Android 17 QPR1, and a log-only probe runs in system_server. The feature itself isn't built yet. See [docs/plan.md](docs/plan.md).
+> **Status: in development.** The hook targets are verified on Android 17 QPR1, a log-only probe runs in system_server, and the press-sequencing logic is built and tested on the PC. It isn't wired into the phone yet, so the feature doesn't work yet. See [docs/plan.md](docs/plan.md).
 
 > [!WARNING]
 > **Read this before installing anything from this repo.**
@@ -55,6 +55,7 @@ git clone --recurse-submodules https://github.com/SoansSandha/sidearm.git
 cd sidearm
 bash scripts/setup-repo.sh        # turns on the repo's hygiene hooks
 ./gradlew :app:assembleDebug
+./gradlew check                   # formatting, lint, unit tests and the coverage gate
 ```
 
 For development on a rooted test phone:

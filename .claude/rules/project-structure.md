@@ -38,7 +38,7 @@ The Phase 0 probe (`hook/SidearmModule.kt`, `hook/GestureLauncherTargets.kt`) is
 
 - One public top-level type per file, named after the type.
 - Tests live in `src/test/kotlin` under the same package as the code they test, named `<Type>Test.kt`. Test fixtures go in a `fixture` sub-package.
-- Once Phase 1 adds convention plugins, module build files only apply them and set `namespace` and module-specific dependencies.
+- Module build files only apply a convention plugin and set `namespace`, module-specific dependencies and, in `:app`, the app's identity (`applicationId`, version). Everything shared goes in `build-logic/`.
 - Every version (libraries, plugins, SDK levels) lives in `gradle/libs.versions.toml`. Never put a version literal in a build file.
 - `META-INF/xposed/*` lives only in `app/src/main/resources/`. App strings go in `app/src/main/res/values/strings.xml`. Icons are vector drawables only; the hygiene check blocks raster images.
 
@@ -71,4 +71,4 @@ Don't add a top-level directory without updating plan §4 and this file.
 
 ## One-command verification
 
-From Phase 1, `./gradlew check` runs formatting (Spotless + ktlint), lint, unit tests and the Kover gate. Before any commit, also run `bash scripts/check-repo-hygiene.sh`.
+`./gradlew check` runs formatting (Spotless + ktlint), lint, unit tests and the Kover gate. Before any commit, also run `bash scripts/check-repo-hygiene.sh`.

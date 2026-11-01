@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("build-logic")
     repositories {
         google {
             content {
@@ -22,4 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "sidearm"
 
-include(":app", ":hook")
+include(":app", ":core", ":hook")
