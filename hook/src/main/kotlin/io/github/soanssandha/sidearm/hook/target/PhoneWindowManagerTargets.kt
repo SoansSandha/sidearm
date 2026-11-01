@@ -9,8 +9,8 @@ import java.lang.reflect.Method
 
 /**
  * Reflective handles into Android 17's `PhoneWindowManager`, for opening the chosen app the way its own
- * double-press-to-app setting does (docs/plan.md §3.3). Resolved once at boot, all-or-nothing, together with
- * [GestureLauncherTargets].
+ * double-press-to-app setting does, and for asking SystemUI to unlock first (docs/plan.md §3.3). Resolved once at
+ * boot, all-or-nothing, together with [GestureLauncherTargets].
  *
  * The instance itself only exists once WindowManagerService has started, so it's looked up at launch time.
  */
@@ -23,6 +23,7 @@ internal class PhoneWindowManagerTargets private constructor(
     private val isShowing: Method,
     private val startActivityAsUser: Method,
     private val currentOrSelf: Any,
+    private val dismissKeyguardLw: Method,
 ) {
 
     /** The running PhoneWindowManager, or null before WindowManagerService has registered it. */
@@ -44,11 +45,21 @@ internal class PhoneWindowManagerTargets private constructor(
         startActivityAsUser.invoke(policy, intent, currentOrSelf)
     }
 
+    /**
+     * Asks SystemUI to unlock, showing the fingerprint overlay or bouncer the way the Wallet tile does, and then calls
+     * [callback], an `IKeyguardDismissCallback`. If the keyguard isn't showing, PhoneWindowManager calls its
+     * `onDismissError` straight away.
+     */
+    fun dismissKeyguard(policy: Any, callback: Any) {
+        dismissKeyguardLw.invoke(policy, callback, null)
+    }
+
     companion object {
         private const val LOCAL_SERVICES_CLASS = "com.android.server.LocalServices"
         private const val POLICY_CLASS = "com.android.server.policy.WindowManagerPolicy"
         private const val PHONE_WINDOW_MANAGER_CLASS = "com.android.server.policy.PhoneWindowManager"
         private const val KEYGUARD_DELEGATE_CLASS = "com.android.server.policy.keyguard.KeyguardServiceDelegate"
+        private const val DISMISS_CALLBACK_CLASS = "com.android.internal.policy.IKeyguardDismissCallback"
 
         @SuppressLint("PrivateApi") // system_server's own classes, which this module exists to hook.
         fun resolve(classLoader: ClassLoader): Result<PhoneWindowManagerTargets> = runCatching {
@@ -58,6 +69,7 @@ internal class PhoneWindowManagerTargets private constructor(
                 phoneWindowManager = Class.forName(PHONE_WINDOW_MANAGER_CLASS, false, classLoader),
                 keyguardDelegate = Class.forName(KEYGUARD_DELEGATE_CLASS, false, classLoader),
                 userHandle = UserHandle::class.java,
+                dismissCallback = Class.forName(DISMISS_CALLBACK_CLASS, false, classLoader),
             ).getOrThrow()
         }
 
@@ -68,6 +80,7 @@ internal class PhoneWindowManagerTargets private constructor(
             phoneWindowManager: Class<*>,
             keyguardDelegate: Class<*>,
             userHandle: Class<*>,
+            dismissCallback: Class<*>,
         ): Result<PhoneWindowManagerTargets> = runCatching {
             check(policy.isAssignableFrom(phoneWindowManager)) { "$phoneWindowManager doesn't implement $policy" }
             PhoneWindowManagerTargets(
@@ -84,6 +97,12 @@ internal class PhoneWindowManagerTargets private constructor(
                     userHandle,
                 ),
                 currentOrSelf = checkNotNull(userHandle.declaredField("CURRENT_OR_SELF", userHandle).get(null)),
+                dismissKeyguardLw = phoneWindowManager.declaredMethod(
+                    "dismissKeyguardLw",
+                    Void.TYPE,
+                    dismissCallback,
+                    CharSequence::class.java,
+                ),
             )
         }
     }

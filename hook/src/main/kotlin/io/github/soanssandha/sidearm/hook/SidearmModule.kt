@@ -14,6 +14,7 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 import io.github.soanssandha.sidearm.core.config.ConfigKeys
 import io.github.soanssandha.sidearm.core.sequencer.Timing
 import io.github.soanssandha.sidearm.hook.config.RemoteConfigReader
+import io.github.soanssandha.sidearm.hook.effect.DeviceWaker
 import io.github.soanssandha.sidearm.hook.effect.HeldCamera
 import io.github.soanssandha.sidearm.hook.effect.HookLog
 import io.github.soanssandha.sidearm.hook.effect.Sequencer
@@ -24,7 +25,9 @@ import io.github.soanssandha.sidearm.hook.intercept.CameraGestureHooker
 import io.github.soanssandha.sidearm.hook.intercept.PowerKeyDownHooker
 import io.github.soanssandha.sidearm.hook.intercept.SequenceStart
 import io.github.soanssandha.sidearm.hook.target.GestureLauncherTargets
+import io.github.soanssandha.sidearm.hook.target.KeyguardDismissCallbackTargets
 import io.github.soanssandha.sidearm.hook.target.PhoneWindowManagerTargets
+import io.github.soanssandha.sidearm.hook.target.PowerManagerTargets
 import java.lang.reflect.Method
 import kotlin.concurrent.thread
 
@@ -84,11 +87,16 @@ class SidearmModule : XposedModule() {
         val installed = mutableListOf<HookHandle>()
         var built: Runtime? = null
         runCatching {
-            val gestureLauncher = GestureLauncherTargets.resolve(classLoader).getOrThrow()
-            val windowManager = PhoneWindowManagerTargets.resolve(classLoader).getOrThrow()
-            val next = build(gestureLauncher, windowManager)
+            val targets = Targets(
+                gestureLauncher = GestureLauncherTargets.resolve(classLoader).getOrThrow(),
+                windowManager = PhoneWindowManagerTargets.resolve(classLoader).getOrThrow(),
+                dismissCallback = KeyguardDismissCallbackTargets.resolve(classLoader).getOrThrow(),
+                power = PowerManagerTargets.resolve().getOrThrow(),
+            )
+            val gestureLauncher = targets.gestureLauncher
+            val next = build(targets)
             built = next
-            val specs = hookSpecs(gestureLauncher, windowManager, next)
+            val specs = hookSpecs(targets, next)
             specs.forEach { spec ->
                 installed += oldById[spec.id]?.replaceHook(spec.hooker)
                     ?: hook(spec.method)
@@ -118,12 +126,25 @@ class SidearmModule : XposedModule() {
         }
     }
 
-    private fun build(gestureLauncher: GestureLauncherTargets, windowManager: PhoneWindowManagerTargets): Runtime {
+    private fun build(targets: Targets): Runtime {
         // Timers, launches and config changes run on system_server's main looper. Vector calls
         // onSystemServerStarting after SystemServer has prepared it, and its messages only run once boot is done.
         val handler = Handler(checkNotNull(Looper.getMainLooper()) { "No main looper yet" })
+        val gestureLauncher = targets.gestureLauncher
         val heldCamera = HeldCamera(getInvoker(gestureLauncher.handleCameraGesture).setType(Invoker.Type.ORIGIN))
-        val effects = SystemEffectRunner(handler, heldCamera, TargetLauncher(windowManager, hookLog), hookLog)
+        val effects = SystemEffectRunner(
+            handler = handler,
+            heldCamera = heldCamera,
+            launcher = TargetLauncher(
+                windowManager = targets.windowManager,
+                dismissCallback = targets.dismissCallback,
+                handler = handler,
+                latestPress = { heldCamera.service?.let(gestureLauncher::lastPowerDown) },
+                log = hookLog,
+            ),
+            waker = DeviceWaker(targets.windowManager, targets.power, hookLog),
+            log = hookLog,
+        )
         val sequencer = Sequencer(Timing(windowMs = gestureLauncher.doubleTapWindowMs), effects, hookLog)
         // Vector calls the listener on a binder thread under its own lock; apply the change on the main looper.
         val config = RemoteConfigReader(openPreferences = { getRemotePreferences(ConfigKeys.GROUP) }) { config ->
@@ -135,12 +156,9 @@ class SidearmModule : XposedModule() {
         return Runtime(handler, sequencer, effects, heldCamera, config, hookLog)
     }
 
-    private fun hookSpecs(
-        gestureLauncher: GestureLauncherTargets,
-        windowManager: PhoneWindowManagerTargets,
-        runtime: Runtime,
-    ): List<HookSpec> {
-        val sequenceStart = SequenceStart(windowManager)
+    private fun hookSpecs(targets: Targets, runtime: Runtime): List<HookSpec> {
+        val gestureLauncher = targets.gestureLauncher
+        val sequenceStart = SequenceStart(targets.windowManager)
         return listOf(
             HookSpec(
                 ID_POWER_KEY_DOWN,
@@ -162,6 +180,14 @@ class SidearmModule : XposedModule() {
     }
 
     private class HookSpec(val id: String, val method: Method, val hooker: Hooker)
+
+    /** Every framework handle the hook needs, resolved together so that one missing member installs nothing. */
+    private class Targets(
+        val gestureLauncher: GestureLauncherTargets,
+        val windowManager: PhoneWindowManagerTargets,
+        val dismissCallback: KeyguardDismissCallbackTargets,
+        val power: PowerManagerTargets,
+    )
 
     /** One generation's live objects, started after its hooks are in and retired as a whole. */
     private class Runtime(

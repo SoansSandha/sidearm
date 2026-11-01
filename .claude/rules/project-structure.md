@@ -51,7 +51,7 @@ Debug-only developer tools, such as the adb config activity, live in `app/src/de
 | How the system works now | `docs/architecture.md` (from Phase 2) |
 | Why a decision was made | `docs/decisions/NNNN-short-title.md`: an ADR with context, decision and consequences. To change one, write a new ADR that supersedes it; never rewrite an accepted one. |
 | Verified framework signatures per build | `docs/hook-targets.md` |
-| Device test matrix, SOS procedure, post-OTA checklist | `docs/testing.md` (from Phase 3) |
+| Device test matrix, SOS procedure, post-OTA checklist | `docs/testing.md` |
 | Install, requirements, safety and recovery for users | `README.md` |
 | Our license; third-party licenses and notices | `LICENSE` (GPL-3.0-or-later); `THIRD_PARTY_NOTICES.md` |
 | Release notes | `CHANGELOG.md` (from Phase 5, in Keep a Changelog format) |

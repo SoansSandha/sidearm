@@ -38,13 +38,13 @@ Nothing runs in the background: no service, receiver, job or wakelock. The only 
 | `hook` | `SidearmModule`: resolves targets, installs the hooks, wires one `Runtime` per generation, handles hot reload |
 | `hook.target` | `GestureLauncherTargets`, `PhoneWindowManagerTargets`: reflection handles resolved once at boot, all-or-nothing |
 | `hook.intercept` | `PowerKeyDownHooker`, `CameraGestureHooker`: turn hooked calls into sequencer events; `SequenceStart`: whether the phone was locked at press 1 |
-| `hook.effect` | `Sequencer` (state, lock, dry-run latch), `SystemEffectRunner`, `HeldCamera`, `TargetLauncher`, `HookLog` |
+| `hook.effect` | `Sequencer` (state, lock, dry-run latch), `SystemEffectRunner`, `HeldCamera`, `TargetLauncher` (with `DismissCallbackBinder` for unlock-then-open), `DeviceWaker`, `HookLog` |
 | `hook.config` | `RemoteConfigReader`: follows the remote prefs and decodes them through `:core` |
 
 ## Boot and install
 
 1. Vector calls `SidearmModule.onSystemServerStarting` just before `SystemServer.startBootstrapServices`.
-2. Both `*Targets` classes resolve every method and field they need. If anything is missing or changed type, nothing is hooked, one warning is logged, and the power button stays stock.
+2. The `*Targets` classes (`GestureLauncherService`, `PhoneWindowManager`, `IKeyguardDismissCallback`, `PowerManager`) resolve every method and field they need. If anything is missing or changed type, nothing is hooked, one warning is logged, and the power button stays stock.
 3. The module builds a `Runtime`: a `Handler` on system_server's main looper, an `ORIGIN` invoker for `handleCameraGesture`, the effect runner, the sequencer and the config reader.
 4. It hooks `interceptPowerKeyDown` and `handleCameraGesture` with `ExceptionMode.PROTECTIVE`, then deoptimizes `interceptPowerKeyDown`, so ART can't have inlined the camera call past the hook.
 5. Reading the config is posted to the main looper, whose queue only starts running once boot has finished. The posted message starts a short-lived thread, "Sidearm config". Opening Vector's preferences is a blocking binder call, so it never runs on the input thread or on a looper the system_server watchdog monitors. The thread retries up to five times, 5 s apart, if Vector isn't ready, then ends. Until the config arrives, the feature is off.
@@ -59,12 +59,13 @@ All times are the key events' uptime clock.
    - **Unlocked at press 1:** the original runs at once and the camera opens as in stock. Holding would make SystemUI lock the phone. If stock then counts press 3 within the window, `interceptPowerKeyDown` returns `true` and `LaunchTarget` (with no camera fallback) opens the app over the camera, as in step 6.
 3. The sequencer runs `reduce()` under its lock and releases the lock before running effects. `ScheduleTimer` posts to the main looper at `press 2 + W + G` (300 + 50 ms).
 4. **Main looper.** If the timer fires first, the held call is replayed through the `ORIGIN` invoker (skipping every hook, ours included), and the camera opens. A press 3 that stock still counts within the window then opens the app over it.
-5. **Input thread.** If stock counts press 3 first, the sequencer cancels the timer, `interceptPowerKeyDown` returns `true` (so the screen doesn't toggle), and `LaunchTarget` is posted to the main looper.
-6. **Main looper.** `TargetLauncher` gets PhoneWindowManager from `LocalServices`. It opens the app only if the keyguard isn't showing and the target is one of its package's enabled, exported `MAIN`/`LAUNCHER` activities. That check matters because system_server could otherwise start any activity, even an unexported one. It starts the app through PWM's own `startActivityAsUser(intent, CURRENT_OR_SELF)`, with `NEW_TASK | RESET_TASK_IF_NEEDED`. Otherwise it replays the held camera if there is one, so press 3 still does something.
+5. **Input thread.** If stock counts press 3 first, the sequencer cancels the timer, `interceptPowerKeyDown` returns `true` (so the screen doesn't toggle), and `LaunchTarget` is posted to the main looper. If press 3 came while the device wasn't interactive, `DeviceWaker` wakes it first, with `WAKE_REASON_POWER_BUTTON`, as PhoneWindowManager does for a power press.
+6. **Main looper.** `TargetLauncher` gets PhoneWindowManager from `LocalServices`, and checks that the target is one of its package's enabled, exported `MAIN`/`LAUNCHER` activities. That check matters because system_server could otherwise start any activity, even an unexported one. Then:
+   - **Keyguard not showing:** it starts the app through PWM's own `startActivityAsUser(intent, CURRENT_OR_SELF)`, with `NEW_TASK | RESET_TASK_IF_NEEDED`.
+   - **Keyguard showing:** 400 ms later it calls PWM's `dismissKeyguardLw` with a `DismissCallbackBinder`, unless another power press came in between (ADR 0008). SystemUI shows the fingerprint overlay, as for the Wallet tile, and face unlock runs. **Binder thread:** SystemUI reports success, cancel or error, and the callback posts the result back to the main looper. Success opens the app; cancel opens nothing; an error runs the held camera if there is one.
+   - **Not a launcher activity, or no PhoneWindowManager:** it replays the held camera if there is one, so press 3 still does something.
 
 The launcher check queries system_server's own user (user 0), and the launch goes to the current user, as PhoneWindowManager's own launches do. On a phone with one user those are the same; more than one user is out of scope for v1.
-
-Opening the app while the phone is locked (`dismissKeyguardToLaunch`), and waking it for a press 3 that came while it wasn't interactive, arrive in Phase 3. Until then those cases open the camera, and `WakeDevice` only logs.
 
 ## Threads and locks
 
@@ -73,6 +74,7 @@ Opening the app while the phone is locked (`dismissKeyguardToLaunch`), and wakin
 | Input (InputReader) | both hookers | the sequencer lock, briefly |
 | system_server main looper | timers, launches, config changes | the sequencer lock, briefly |
 | Binder (Vector's callback) | `RemoteConfigReader` listener | Vector's listener lock → the reader's lock; it only posts the new config to the main looper |
+| Binder (SystemUI's unlock result) | `DismissCallbackBinder` | nothing; it posts the result to the main looper |
 | "Sidearm config" (short-lived) | the first config read | the reader's lock, briefly |
 | Hot reload | `onHotReloading` | the reader's lock, then the sequencer lock, never both |
 

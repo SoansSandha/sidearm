@@ -10,7 +10,6 @@ import io.github.soanssandha.sidearm.hook.effect.fixture.RecordingLog
 import io.github.soanssandha.sidearm.hook.intercept.fixture.FakeChain
 import io.github.soanssandha.sidearm.hook.intercept.fixture.FakeInvoker
 import io.github.soanssandha.sidearm.hook.target.GestureLauncherTargets
-import io.github.soanssandha.sidearm.hook.target.PhoneWindowManagerTargets
 import io.github.soanssandha.sidearm.hook.target.fixture.GestureLauncherFixtures
 import io.github.soanssandha.sidearm.hook.target.fixture.PhoneWindowManagerFixtures
 import kotlin.test.AfterTest
@@ -27,13 +26,7 @@ class CameraGestureHookerTest {
         statusBarManager = GestureLauncherFixtures.StatusBarManager::class.java,
     ).getOrThrow()
 
-    private val windowManager = PhoneWindowManagerTargets.resolve(
-        localServices = PhoneWindowManagerFixtures.LocalServices::class.java,
-        policy = PhoneWindowManagerFixtures.WindowManagerPolicy::class.java,
-        phoneWindowManager = PhoneWindowManagerFixtures.PhoneWindowManager::class.java,
-        keyguardDelegate = PhoneWindowManagerFixtures.KeyguardServiceDelegate::class.java,
-        userHandle = PhoneWindowManagerFixtures.UserHandle::class.java,
-    ).getOrThrow()
+    private val windowManager = PhoneWindowManagerFixtures.resolveTargets().getOrThrow()
 
     private val runner = FakeEffectRunner()
     private val log = RecordingLog()
