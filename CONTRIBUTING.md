@@ -45,6 +45,7 @@ The script stops unless the worktree is clean. It then fetches, fast-forwards `d
 
 - Name the branch after what the task is about to do. More work on the same task stays on its branch, and a task that changes no files needs no branch.
 - Claude runs the script on its own when a new task begins and the worktree is clean. If there are uncommitted changes, it asks first (rules §1).
+- GitHub deletes merged branches, but local copies stay. When the branch you're leaving is already on `develop`, the script says so and gives the `git branch -D` command; deleting it is still the owner's call.
 
 If the work grows past the branch's name, for example a fix that turned into a feature or a second related change, rename the branch so the name still describes it. If the new part could ship on its own, a separate branch is usually better, since each PR covers one concern. Claude proposes the new name or the split and waits for the owner's OK before renaming.
 
