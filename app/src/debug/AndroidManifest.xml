@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <!-- Debug builds only: sets the hook's config from adb until the config app exists (Phase 4).
+        <!-- Debug builds only: sets the hook's config from adb, for scripts and for dry run, which the app doesn't show.
              The adb shell holds DUMP and third-party apps can't, so nothing else on the phone can start it.
              It's invisible and finishes when done, so each `am start` gets a new instance with its extras. -->
         <activity

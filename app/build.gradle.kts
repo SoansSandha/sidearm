@@ -23,4 +23,13 @@ dependencies {
     compileOnly(libs.libxposed.api)
     // The app's side of Vector: its service binder and the remote preferences the hook reads.
     implementation(libs.libxposed.service)
+
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    testImplementation(libs.kotlinx.coroutines.test)
 }

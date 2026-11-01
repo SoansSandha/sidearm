@@ -1,6 +1,8 @@
 # Hook targets per build
 
-Everything Sidearm reaches into, checked against each supported build's own framework jars. Add a section for each new build fingerprint after an OTA, and keep the old ones.
+Everything Sidearm reaches into, checked against each supported build's own framework jars. Add a section for each new build fingerprint after an OTA, and keep the old ones. The config app's `TestedBuilds` (`app/src/main/kotlin/.../data/TestedBuilds.kt`) lists the same builds; it warns on any other build, so add each new one there too. It needs the full `ro.build.fingerprint`, which ends in `:user/release-keys`; the headings below leave that off.
+
+The config app reads the double-press setting the way `GestureLauncherService` does (`isCameraDoubleTapPowerSettingEnabled`): the framework integers `config_doubleTapPowerGestureMode` and `config_doubleTapPowerGestureMultiTargetDefaultAction`, and the `Settings.Secure` keys `double_tap_power_button_gesture_enabled`, `double_tap_power_button_gesture` and `camera_double_tap_power_gesture_disabled`. All three keys are `@Readable` on `android17-release`, so an app can read them. Its "Open gesture settings" button starts `android.settings.action.DOUBLE_TAP_POWER_SETTINGS` (`Settings$DoubleTapPowerSettingsActivity`), falling back to the Settings home.
 
 ## How to check a build
 

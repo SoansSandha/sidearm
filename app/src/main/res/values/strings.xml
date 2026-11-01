@@ -1,4 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Sidearm</string>
+
+    <!-- Top app bar -->
+    <string name="more_options">More options</string>
+    <string name="about">About</string>
+
+    <!-- Status card -->
+    <string name="triple_press">Triple press</string>
+    <string name="hero_connecting">Connecting</string>
+    <string name="hero_connecting_detail">Waiting for Vector</string>
+    <string name="hero_not_connected">Not connected</string>
+    <string name="hero_not_connected_detail">Vector hasn\'t connected to Sidearm</string>
+    <string name="hero_not_connected_fix">Enable Sidearm in the Vector manager, then reboot. If it\'s already enabled, close this app and open it again.</string>
+    <string name="hero_off">Off</string>
+    <string name="hero_off_detail">Three presses of the power button do what they normally do</string>
+    <string name="hero_not_in_scope">Not in scope</string>
+    <string name="hero_not_in_scope_detail">Sidearm can\'t reach the power button</string>
+    <string name="hero_not_in_scope_fix">Add System Framework to Sidearm\'s scope in the Vector manager, then reboot.</string>
+    <string name="hero_reboot">Reboot needed</string>
+    <string name="hero_not_loaded_detail">Sidearm isn\'t loaded yet</string>
+    <string name="hero_not_loaded_fix">Sidearm starts with the phone. Reboot to load it.</string>
+    <string name="hero_outdated_detail">An older copy of Sidearm is running</string>
+    <string name="hero_outdated_fix">Reboot to load this version.</string>
+    <string name="hero_load_failed">Couldn\'t load</string>
+    <string name="hero_load_failed_detail">Vector couldn\'t load Sidearm</string>
+    <string name="hero_load_failed_fix">Check Sidearm\'s log in the Vector manager.</string>
+    <string name="hero_no_target">Choose an app</string>
+    <string name="hero_no_target_detail">Pick the app three presses open</string>
+    <string name="hero_target_gone">App not found</string>
+    <string name="hero_target_gone_detail">%1$s isn\'t installed or can\'t be opened</string>
+    <string name="hero_paused">Paused</string>
+    <string name="hero_double_press_wallet">Double-press opens Wallet</string>
+    <string name="hero_double_press_off">Double-press is off</string>
+    <string name="hero_double_press_fix">Triple press only works when double-press opens the camera.</string>
+    <string name="hero_dry_run">Dry run</string>
+    <string name="hero_dry_run_detail">Three presses would open %1$s. For now they\'re only logged.</string>
+    <string name="hero_active">Active</string>
+    <string name="hero_active_detail">Three presses open %1$s</string>
+    <string name="hero_untested_build">Sidearm hasn\'t been tested on build %1$s. If triple press does nothing, it has turned itself off on this build.</string>
+    <string name="hero_framework">%1$s %2$s · API %3$d</string>
+    <string name="hero_framework_in_scope">%1$s %2$s · API %3$d · System Framework</string>
+    <string name="choose_app">Choose app</string>
+    <string name="open_gesture_settings">Open gesture settings</string>
+
+    <!-- Target card -->
+    <string name="opens">Opens</string>
+    <string name="no_app_chosen">No app chosen</string>
+    <string name="not_installed">Not installed</string>
+    <string name="change">Change</string>
+    <string name="choose">Choose</string>
+
+    <!-- Checks card -->
+    <string name="checks">Checks</string>
+    <string name="check_connecting">Connecting to Vector</string>
+    <string name="check_not_connected">Vector isn\'t connected</string>
+    <string name="check_connected">%1$s %2$s connected (API %3$d)</string>
+    <string name="check_in_scope">System Framework is in scope</string>
+    <string name="check_not_in_scope">System Framework isn\'t in scope</string>
+    <string name="check_loaded">Loaded in System Framework</string>
+    <string name="check_reloading">Reloading in System Framework</string>
+    <string name="check_not_loaded">Not loaded yet: reboot to load it</string>
+    <string name="check_stale">An older copy is loaded: reboot to update it</string>
+    <string name="check_load_failed">Failed to load in System Framework</string>
+    <string name="check_double_press_camera">Double-press opens the camera</string>
+    <string name="check_double_press_wallet">Double-press opens Wallet, not the camera</string>
+    <string name="check_double_press_off">Double-press is off</string>
+    <string name="check_double_press_unknown">Couldn\'t read the double-press setting</string>
+    <string name="check_build_tested">Tested on %1$s</string>
+    <string name="check_build_untested">Not tested on %1$s</string>
+
+    <!-- Power button card -->
+    <string name="power_button">Power button</string>
+    <string name="press_screen">Screen</string>
+    <string name="press_camera">Camera</string>
+    <string name="press_your_app">Your app</string>
+    <string name="press_sos">Emergency SOS</string>
+    <plurals name="press_description">
+        <item quantity="one">%1$d press: %2$s</item>
+        <item quantity="other">%1$d presses: %2$s</item>
+    </plurals>
+
+    <!-- App picker -->
+    <string name="choose_an_app">Choose an app</string>
+    <string name="search_apps">Search apps</string>
+    <string name="clear_search">Clear search</string>
+    <string name="no_matching_apps">No apps match</string>
+
+    <!-- Messages -->
+    <string name="save_failed">Couldn\'t save. Is Vector running?</string>
+
+    <!-- About -->
+    <string name="about_title">Sidearm %1$s</string>
+    <string name="about_body">Press the power button three times to open an app. Sidearm is free software under the GNU GPL, version 3 or later.</string>
+    <string name="source_code">Source code</string>
+    <string name="close">Close</string>
 </resources>
