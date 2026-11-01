@@ -123,19 +123,13 @@ The repo describes the **Pixel 9 Pro XL on Android 17** in general, never the ow
   - In a public repo, logs and artifacts are visible to anyone.
   - Fork PRs must never reach secrets. Don't use `pull_request_target` or `workflow_run` to run fork code, and require approval before workflows run for outside contributors.
 - **Release APKs.** Build them in CI from secrets, not on this PC, so they don't carry local paths or a debug signature. Never commit them; publish them as GitHub Release assets.
-- **GitHub settings.** Every settings change, including visibility, needs the owner's explicit instruction (section 1).
-  - For the branching model in `CONTRIBUTING.md` (set on 2026-10-31):
-    - the default branch stays `main` for now, by the owner's choice, so PRs need `develop` picked as their base
-    - squash merging and merge commits are allowed; rebase merging is off
-    - merged head branches are deleted automatically. The "Keep develop" ruleset restricts deleting `develop`, which also stops auto-delete from removing it when a release PR merges.
-  - For a public repo, these should also be on:
-    - secret scanning and push protection (free for public repos)
-    - Dependabot alerts
-    - private vulnerability reporting
-    - rulesets on `main` and `develop` that require a pull request and block force-pushes and deletion. `main` allows only merge commits; `develop` allows squash and merge commits.
-    - a tag ruleset on `v*` that blocks updates and deletion
-
-    Until those rulesets are on, the pre-push hook is the only guard against direct pushes.
+- **GitHub settings.** Every settings change, including visibility, needs the owner's explicit instruction (section 1). The repo is public, and these are on (checked 2026-10-31):
+  - Merging: the default branch stays `main` for now, by the owner's choice, so PRs need `develop` picked as their base. Squash merging and merge commits are allowed; rebase merging is off. Merged head branches are deleted automatically.
+  - Rulesets, none with a bypass list:
+    - "Protect main": changes only through a pull request, merge commits only, no force-push or deletion.
+    - "Protect develop": changes only through a pull request, squash or merge commit, no force-push or deletion. Blocking deletion also stops auto-delete from removing `develop` when a release PR merges.
+    - "Protect release tags": `v*` tags can't be updated or deleted.
+  - Security: secret scanning with push protection, Dependabot alerts, and private vulnerability reporting. Dependabot security updates stay off, because their PRs would target `main`, the default branch.
 
   Add no collaborators, deploy keys or apps without the owner's OK.
 - **Dependencies.** The ECC submodule and Gradle dependencies are pinned. Review the changes before bumping a pin, because a bump pulls in third-party content. After bumping ECC, check its LICENSE and update `THIRD_PARTY_NOTICES.md`.

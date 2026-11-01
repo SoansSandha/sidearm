@@ -200,7 +200,7 @@ Structure work by phase. It's spread out so each piece arrives when it first pay
 | Phase 3 | `docs/testing.md` (§6 moves there); `scripts/device-smoke.sh` |
 | Phase 4 | `:app` `ui/` and `data/` packages; Compose configured in the application convention plugin |
 | Phase 5 | `.github/` (CI running `./gradlew check` and the hygiene check, release workflow, Dependabot for Gradle and Actions, but not the ECC submodule, PR template); CI also checks PR titles against Conventional Commits; Dependabot targets `develop` with `build(deps)` commit prefixes; the release workflow runs on `vX.Y.Z` tags on `main`; `CHANGELOG.md`; release versioning |
-| When flipping to public | The GitHub settings in the rules' §9: secret scanning, push protection, Dependabot alerts, private vulnerability reporting, and rulesets on `main`, `develop` and `v*` tags |
+| Public-repo settings ✅ (2026-10-31; the repo was already public) | The GitHub settings in the rules' §9: secret scanning, push protection, Dependabot alerts, private vulnerability reporting, and rulesets on `main`, `develop` and `v*` tags |
 
 Deliberately left out, because the project is too small to need them: feature or `:core:*` sub-modules, a DI framework, product flavors, instrumented tests, and a hidden-API stub module (reflection is centralised in `hook/target/` instead; add one only if that outgrows itself).
 
