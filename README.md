@@ -68,6 +68,7 @@ The first install needs Sidearm enabled in the Vector manager for "System Framew
 
 - [docs/plan.md](docs/plan.md): design, phases, testing, risks and recovery.
 - [docs/hook-targets.md](docs/hook-targets.md): framework methods and fields Sidearm relies on, per Android build.
+- [CONTRIBUTING.md](CONTRIBUTING.md): branches, commit messages, pull requests and releases.
 - [.claude/rules/git-and-privacy.md](.claude/rules/git-and-privacy.md): what may and may not be committed.
 - [.claude/rules/project-structure.md](.claude/rules/project-structure.md): where code, docs and scripts go.
 

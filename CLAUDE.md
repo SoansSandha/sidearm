@@ -11,6 +11,10 @@ Status: Phases 0 and 1 are done. A log-only probe verified the hook targets on A
 - Never commit secrets, or anything specific to the owner's phone or PC. Personal notes go in `.claude/private/` (git-ignored).
 - Before asking to commit or push, run `bash scripts/check-repo-hygiene.sh` and the pre-flight in §6 of the rules.
 - Where code, docs and scripts go, and what may depend on what: `.claude/rules/project-structure.md` (also loaded every conversation).
+- Branches, commits, PRs and releases follow `CONTRIBUTING.md`.
+  - When a new task begins and the worktree is clean, run `bash scripts/start-branch.sh <type>/<description>` without asking. It updates `develop` from origin and branches off it.
+  - If the work outgrows the branch name, propose a rename and wait for the owner's OK.
+  - Commit messages follow Conventional Commits. Topic branches are squash-merged into `develop`, and `develop` reaches `main` only through a release PR. Never commit on `main` or `develop`.
 
 After a fresh clone, run `bash scripts/setup-repo.sh` once. It turns on the hygiene hooks (pre-commit, commit-msg, pre-push) and tells you if the commit email isn't the GitHub noreply address, or if `.claude/private/denylist.txt` is missing.
 

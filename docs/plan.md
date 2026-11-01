@@ -155,6 +155,7 @@ Target layout. A phase in brackets means the item doesn't exist yet.
 ```
 sidearm/
 ├─ README.md                  # what it is, safety warning, requirements, install, recovery, build
+├─ CONTRIBUTING.md            # branches, commit messages, PRs, releases, and a playbook per situation
 ├─ CHANGELOG.md               # [Phase 5] Keep a Changelog, one entry per tagged release
 ├─ LICENSE                    # GPL-3.0-or-later (see §9)
 ├─ THIRD_PARTY_NOTICES.md     # licenses of copied or referenced third-party material (ECC's MIT notice)
@@ -173,11 +174,12 @@ sidearm/
 ├─ docs/
 │  ├─ plan.md                 # roadmap and status; design sections move out as phases finish
 │  ├─ architecture.md         # [Phase 2] how it works now: processes, modules, data flow
-│  ├─ decisions/              # [Phase 2] ADRs, starting with those already made in §3.6 and §9
+│  ├─ decisions/              # ADRs: 0001 branching model; [Phase 2] those already made in §3.6 and §9
 │  ├─ hook-targets.md         # verified framework signatures, one section per build
 │  └─ testing.md              # [Phase 3] device matrix, SOS procedure, post-OTA checklist (moved from §6)
-├─ scripts/                   # dev-install, setup-repo, check-repo-hygiene, sync-ecc; [Phase 3] device-smoke
-├─ .githooks/                 # pre-commit, commit-msg, pre-push → scripts/check-repo-hygiene.sh
+├─ scripts/                   # dev-install, setup-repo, start-branch, check-repo-hygiene, check-conventions,
+│                             #   sync-ecc; [Phase 3] device-smoke
+├─ .githooks/                 # pre-commit, commit-msg, pre-push → check-repo-hygiene.sh, check-conventions.sh
 ├─ .github/                   # [Phase 5] workflows/ci.yml, workflows/release.yml, dependabot.yml,
 │                             #   PULL_REQUEST_TEMPLATE.md (pre-flight checklist)
 ├─ .claude/                   # rules (ours + ecc/), agents, skills, settings.json; private/ is git-ignored
@@ -193,11 +195,12 @@ Structure work by phase. It's spread out so each piece arrives when it first pay
 | Before the first push ✅ | `README.md`, `.editorconfig`, `.claude/rules/project-structure.md` |
 | Before going public ✅ | `LICENSE`, `THIRD_PARTY_NOTICES.md`, the README safety warning, the public-repo rules (fork PRs, untrusted contributions, GitHub settings) |
 | Phase 1 ✅ | `build-logic` with the three convention plugins; `:core`; Spotless + ktlint; Kover; SDK levels in the catalog; `./gradlew check` running everything; `:app` takes `runtimeOnly(project(":hook"))` (moved up from Phase 2) |
+| After Phase 1 ✅ | The branching model: a `develop` branch, `CONTRIBUTING.md`, ADR 0001 (so `docs/decisions/` starts early), `scripts/check-conventions.sh` in the commit-msg and pre-push hooks, and `scripts/start-branch.sh` for starting work from the latest `develop` |
 | Phase 2 | Reshape `:hook` into `intercept/`, `target/`, `effect/` and `config/` as the probe is replaced; `docs/architecture.md`; first ADRs extracted from §3.6 and §9 |
 | Phase 3 | `docs/testing.md` (§6 moves there); `scripts/device-smoke.sh` |
 | Phase 4 | `:app` `ui/` and `data/` packages; Compose configured in the application convention plugin |
-| Phase 5 | `.github/` (CI running `./gradlew check` and the hygiene check, release workflow, Dependabot for Gradle and Actions, but not the ECC submodule, PR template); `CHANGELOG.md`; release versioning |
-| When flipping to public | The GitHub settings in the rules' §9: secret scanning, push protection, Dependabot alerts, a ruleset on `main` |
+| Phase 5 | `.github/` (CI running `./gradlew check` and the hygiene check, release workflow, Dependabot for Gradle and Actions, but not the ECC submodule, PR template); CI also checks PR titles against Conventional Commits; Dependabot targets `develop` with `build(deps)` commit prefixes; the release workflow runs on `vX.Y.Z` tags on `main`; `CHANGELOG.md`; release versioning |
+| When flipping to public | The GitHub settings in the rules' §9: secret scanning, push protection, Dependabot alerts, private vulnerability reporting, and rulesets on `main`, `develop` and `v*` tags |
 
 Deliberately left out, because the project is too small to need them: feature or `:core:*` sub-modules, a DI framework, product flavors, instrumented tests, and a hidden-API stub module (reflection is centralised in `hook/target/` instead; add one only if that outgrows itself).
 

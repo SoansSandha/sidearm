@@ -7,7 +7,8 @@ cd "$(git rev-parse --show-toplevel)"
 status=0
 
 git config core.hooksPath .githooks
-echo "Hooks enabled: pre-commit, commit-msg and pre-push run scripts/check-repo-hygiene.sh."
+echo "Hooks enabled: pre-commit, commit-msg and pre-push run scripts/check-repo-hygiene.sh;"
+echo "commit-msg and pre-push also run scripts/check-conventions.sh (CONTRIBUTING.md)."
 
 email="$(git config --local user.email || true)"
 if [[ "$email" != *@users.noreply.github.com ]]; then

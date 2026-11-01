@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Runs the repo hygiene check on every commit about to be pushed, so nothing reaches GitHub
-# through history either (a secret added in one commit and deleted in the next is still pushed).
+# Checks each pushed ref against CONTRIBUTING.md (branch and tag names; main and develop change only
+# through pull requests), then runs the repo hygiene check on every commit about to be pushed, so
+# nothing reaches GitHub through history either (a secret added in one commit and deleted in the
+# next is still pushed).
 set -euo pipefail
 
-check="$(git rev-parse --show-toplevel)/scripts/check-repo-hygiene.sh"
+root="$(git rev-parse --show-toplevel)"
+check="$root/scripts/check-repo-hygiene.sh"
+conventions="$root/scripts/check-conventions.sh"
 
-while read -r _local_ref local_sha _remote_ref remote_sha; do
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  bash "$conventions" --push "$1" "$remote_ref" "$local_sha" "$remote_sha" </dev/null
   [[ "$local_sha" =~ ^0+$ ]] && continue          # deleting a remote branch: nothing to check
   if [[ "$remote_sha" =~ ^0+$ ]]; then
     commits="$(git rev-list "$local_sha" --not --remotes)"   # new branch: commits not on any remote
