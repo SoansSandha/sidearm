@@ -13,6 +13,7 @@ internal class SystemEffectRunner(
     private val handler: Handler,
     private val heldCamera: HeldCamera,
     private val launcher: TargetLauncher,
+    private val waker: DeviceWaker,
     private val log: HookLog,
 ) : EffectRunner {
 
@@ -33,12 +34,14 @@ internal class SystemEffectRunner(
     }
 
     override fun wakeDevice() {
-        log.info("Not waking the device: waking on press 3 arrives in Phase 3")
+        waker.wake()
     }
 
     override fun launchTarget(target: TargetComponent, fallback: CameraArgs?) {
         val runFallback = fallback?.let { camera -> { heldCamera.run(camera) } }
-        handler.postGuarded(log, "Launch") { launcher.launch(target, runFallback) }
+        // This runs on the input thread right after press 3, so the latest press is press 3 itself.
+        val press3 = launcher.latestPressNow()
+        handler.postGuarded(log, "Launch") { launcher.launch(target, runFallback, press3) }
     }
 
     override fun checkTarget(target: TargetComponent) {

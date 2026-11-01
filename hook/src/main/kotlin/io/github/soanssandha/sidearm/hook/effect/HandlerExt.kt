@@ -7,7 +7,12 @@ import android.os.Handler
  * system_server. Logs if the looper refused the message.
  */
 internal fun Handler.postGuarded(log: HookLog, what: String, block: () -> Unit) {
-    if (!post { runCatching(block).onFailure { log.warn("$what failed", it) } }) {
+    postGuardedDelayed(log, what, delayMs = 0, block)
+}
+
+/** [postGuarded], [delayMs] from now. */
+internal fun Handler.postGuardedDelayed(log: HookLog, what: String, delayMs: Long, block: () -> Unit) {
+    if (!postDelayed({ runCatching(block).onFailure { log.warn("$what failed", it) } }, delayMs)) {
         log.warn("$what not posted: the looper is quitting")
     }
 }

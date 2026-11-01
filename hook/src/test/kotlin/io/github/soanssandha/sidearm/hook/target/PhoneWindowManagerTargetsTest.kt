@@ -1,11 +1,13 @@
 package io.github.soanssandha.sidearm.hook.target
 
+import io.github.soanssandha.sidearm.hook.target.fixture.KeyguardDismissCallbackFixtures
 import io.github.soanssandha.sidearm.hook.target.fixture.PhoneWindowManagerFixtures
 import io.github.soanssandha.sidearm.hook.target.fixture.PhoneWindowManagerFixtures.KeyguardServiceDelegate
 import io.github.soanssandha.sidearm.hook.target.fixture.PhoneWindowManagerFixtures.LocalServices
 import io.github.soanssandha.sidearm.hook.target.fixture.PhoneWindowManagerFixtures.PhoneWindowManager
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -13,15 +15,19 @@ import kotlin.test.assertTrue
 
 class PhoneWindowManagerTargetsTest {
 
-    private fun resolve(phoneWindowManager: Class<*>) = PhoneWindowManagerTargets.resolve(
-        localServices = LocalServices::class.java,
-        policy = PhoneWindowManagerFixtures.WindowManagerPolicy::class.java,
-        phoneWindowManager = phoneWindowManager,
-        keyguardDelegate = KeyguardServiceDelegate::class.java,
-        userHandle = PhoneWindowManagerFixtures.UserHandle::class.java,
-    )
+    private fun resolve(phoneWindowManager: Class<*>) = PhoneWindowManagerFixtures.resolveTargets(phoneWindowManager)
 
     private val targets by lazy { resolve(PhoneWindowManager::class.java).getOrThrow() }
+
+    @Test
+    fun `asks PhoneWindowManager to dismiss the keyguard with a callback`() {
+        val policy = PhoneWindowManager(KeyguardServiceDelegate(showing = true))
+        val callback = KeyguardDismissCallbackFixtures.Proxy(android.os.Binder())
+
+        targets.dismissKeyguard(policy, callback)
+
+        assertEquals(listOf<Any?>(callback), policy.dismissCallbacks)
+    }
 
     @AfterTest
     fun clearLocalServices() {
@@ -56,6 +62,7 @@ class PhoneWindowManagerTargetsTest {
         val drifted = mapOf(
             PhoneWindowManagerFixtures.WithoutStartActivity::class.java to "startActivityAsUser",
             PhoneWindowManagerFixtures.WithOtherKeyguardDelegate::class.java to "mKeyguardDelegate",
+            PhoneWindowManagerFixtures.WithoutDismissKeyguard::class.java to "dismissKeyguardLw",
         )
 
         drifted.forEach { (phoneWindowManager, member) ->

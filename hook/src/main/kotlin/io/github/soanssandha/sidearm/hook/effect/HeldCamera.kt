@@ -9,8 +9,10 @@ import io.github.soanssandha.sidearm.core.sequencer.CameraArgs
  */
 internal class HeldCamera(private val original: XposedInterface.Invoker<*, *>) {
 
+    /** The GestureLauncherService instance, once the camera hooker has seen a request. */
     @Volatile
-    private var service: Any? = null
+    var service: Any? = null
+        private set
 
     /** Records the GestureLauncherService instance. The camera hooker calls this before every request it handles. */
     fun attach(service: Any) {

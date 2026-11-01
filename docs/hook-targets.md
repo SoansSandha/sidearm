@@ -53,7 +53,7 @@ From `interceptPowerKeyDown` in the `android17-release` source (L662–737), who
 | `android.os.PowerManager` | `wakeUp` | `(JILjava/lang/String;)V` | Wake on press 3 when not interactive |
 | `android.os.PowerManager` | `WAKE_REASON_POWER_BUTTON` | `I` = 1 | Wake reason |
 | `com.android.server.policy.PhoneWindowManager` | `mKeyguardDelegate` | `Lcom/android/server/policy/keyguard/KeyguardServiceDelegate;` | Keyguard path |
-| `…keyguard.KeyguardServiceDelegate` | `isShowing` / `dismissKeyguardToLaunch` | `()Z` / `(Landroid/content/Intent;)V` | Unlock-then-launch |
+| `…keyguard.KeyguardServiceDelegate` | `isShowing` / `dismissKeyguardToLaunch` | `()Z` / `(Landroid/content/Intent;)V` | `isShowing`: the keyguard check. `dismissKeyguardToLaunch`: not used; SystemUI ignores it (see Phase 3) |
 | `com.android.server.wm.WindowManagerService` | constructor | `LocalServices.addService(WindowManagerPolicy.class, mPolicy)` | Reaching the PWM instance |
 
 ### Added in Phase 2
@@ -67,6 +67,20 @@ Phase 2's launch path also needs these. Checked against this build's jars on 202
 | `com.android.server.policy.PhoneWindowManager` | `mContext` | `Landroid/content/Context;` (public on this build) | Checking the target is a launcher activity |
 | `com.android.server.policy.PhoneWindowManager` | `startActivityAsUser` | `(Landroid/content/Intent;Landroid/os/UserHandle;)V` (public final on this build; private in source) | Opening the app (skips while setup is incomplete) |
 | `android.os.UserHandle` | `CURRENT_OR_SELF` | `Landroid/os/UserHandle;`, public static final | The user PWM's own launches use |
+
+### Added in Phase 3
+
+Checked against this build's jars on 2026-11-01. `IKeyguardDismissCallback` and its `Stub` are in `framework.jar` (`classes5.dex`). `PowerManager.wakeUp` and `WAKE_REASON_POWER_BUTTON` are in the table above, checked in Phase 0.
+
+| Class | Member | Descriptor / value | Used for |
+|---|---|---|---|
+| `com.android.server.policy.PhoneWindowManager` | `dismissKeyguardLw` | `(Lcom/android/internal/policy/IKeyguardDismissCallback;Ljava/lang/CharSequence;)V`, public | Asking SystemUI to unlock before opening the app (ADR 0008) |
+| `com.android.internal.policy.IKeyguardDismissCallback` | `onDismissError` / `onDismissSucceeded` / `onDismissCancelled` | `()V`; a `oneway` interface | The unlock result |
+| `…IKeyguardDismissCallback$Stub` | `DESCRIPTOR` | `Ljava/lang/String;` | The callback `Binder`'s descriptor |
+| `…IKeyguardDismissCallback$Stub` | `TRANSACTION_onDismissError` / `…Succeeded` / `…Cancelled` | `I` | Which result a transaction carries |
+| `…IKeyguardDismissCallback$Stub` | `asInterface` | `(Landroid/os/IBinder;)Lcom/android/internal/policy/IKeyguardDismissCallback;` | Wrapping the callback `Binder` for `dismissKeyguardLw` |
+
+On this build SystemUI ignores `KeyguardServiceDelegate.dismissKeyguardToLaunch` (it only logs "Ignoring dismissKeyguardToLaunch"), so that member isn't used even though it exists.
 
 ### What the hook logs
 

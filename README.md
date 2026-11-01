@@ -2,7 +2,7 @@
 
 Triple-press the power button to open an app of your choice, on a rooted Google Pixel 9 Pro XL running Android 17. Sidearm is an LSPosed-style module for the [Vector](https://github.com/JingMatrix/Vector) framework (libxposed API 102).
 
-> **Status: in development.** The hook works on a test phone: from an unlocked phone, a triple press opens the chosen app. Opening it from a locked phone (through the unlock prompt) is next. There's no settings app yet, so development builds are configured over adb. Don't rely on it. See [docs/plan.md](docs/plan.md).
+> **Status: in development.** The hook works on a test phone: a triple press opens the chosen app, and from a locked phone it asks for the fingerprint or face first. There's no settings app yet, so development builds are configured over adb. Don't rely on it. See [docs/plan.md](docs/plan.md).
 
 > [!WARNING]
 > **Read this before installing anything from this repo.**
@@ -60,6 +60,7 @@ bash scripts/setup-repo.sh        # turns on the repo's hygiene hooks
 For development on a rooted test phone:
 - `bash scripts/dev-install.sh` builds and installs the module. Vector hot-reloads it without a reboot.
 - `adb logcat -s Sidearm` shows what it does.
+- `bash scripts/device-smoke.sh` checks single, double and triple presses on the phone (never more than 3 presses in a row). The full device checklist, including the Emergency SOS check, is in [docs/testing.md](docs/testing.md).
 
 The first install needs Sidearm enabled in the Vector manager for "System Framework", followed by one reboot.
 
