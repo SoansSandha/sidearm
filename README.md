@@ -2,7 +2,7 @@
 
 Triple-press the power button to open an app of your choice, on a rooted Google Pixel 9 Pro XL running Android 17. Sidearm is an LSPosed-style module for the [Vector](https://github.com/JingMatrix/Vector) framework (libxposed API 102).
 
-> **Status: in development.** The hook works on a test phone: a triple press opens the chosen app, and from a locked phone it asks for the fingerprint or face first. There's no settings app yet, so development builds are configured over adb. Don't rely on it. See [docs/plan.md](docs/plan.md).
+> **Status: in development.** The hook works on a test phone: a triple press opens the chosen app, and from a locked phone it asks for the fingerprint or face first. The Sidearm app turns it on and off, picks the app, and shows whether everything it needs is in place. Don't rely on it yet. See [docs/plan.md](docs/plan.md).
 
 > [!WARNING]
 > **Read this before installing anything from this repo.**
@@ -38,11 +38,19 @@ Sidearm never changes Android's own press counting, so screen on/off and Emergen
 - [Vector](https://github.com/JingMatrix/Vector) 2.2 or newer (libxposed API 102).
 - Double-press power set to **Camera** (Settings › System › Gestures).
 
+## Setting it up
+
+1. Install the APK, enable Sidearm in the Vector manager with "System Framework" in its scope, and reboot once.
+2. Open the Sidearm app. The card at the top says whether triple press is ready, and if not, what to fix. The Checks card lists each thing it needs: Vector, the scope, the module loaded in System Framework, double-press set to Camera, and an Android build it has been tested on.
+3. Turn on **Triple press** and choose an app. Changes apply straight away, with no reboot.
+
+The app runs only while it's open. It has no background services, receivers or jobs.
+
 ## Safety and recovery
 
-- If an Android update changes the code Sidearm hooks, Sidearm stays inactive and the stock double-press camera keeps working.
+- If an Android update changes the code Sidearm hooks, Sidearm stays inactive and the stock double-press camera keeps working. The app warns when the phone runs a build Sidearm hasn't been tested on.
 - Sidearm never touches the Emergency SOS gesture.
-- To turn it off, disable Sidearm in the Vector manager and reboot.
+- To turn it off, switch off **Triple press** in the Sidearm app; that applies at once. To remove it from system_server entirely, disable Sidearm in the Vector manager and reboot.
 - If the phone ever fails to boot, start Android in safe mode by holding Volume Down while the boot animation starts. Magisk disables all modules in safe mode.
 
 ## Building
@@ -60,9 +68,10 @@ bash scripts/setup-repo.sh        # turns on the repo's hygiene hooks
 For development on a rooted test phone:
 - `bash scripts/dev-install.sh` builds and installs the module. Vector hot-reloads it without a reboot.
 - `adb logcat -s Sidearm` shows what it does.
+- Debug builds can also set the config from adb, including a dry run that only logs presses; see [docs/architecture.md](docs/architecture.md#developing-against-a-phone).
 - `bash scripts/device-smoke.sh` checks single, double and triple presses on the phone (never more than 3 presses in a row). The full device checklist, including the Emergency SOS check, is in [docs/testing.md](docs/testing.md).
 
-The first install needs Sidearm enabled in the Vector manager for "System Framework", followed by one reboot.
+The first install needs Sidearm enabled in the Vector manager for "System Framework", followed by one reboot (see [Setting it up](#setting-it-up)).
 
 ## Project docs
 

@@ -29,8 +29,8 @@ Every package starts with `io.github.soanssandha.sidearm`.
 | hook | `.hook.effect` | Runs the reducer and its effects: the hook-side `Sequencer` (state, lock, dry-run latch), timers, app launch, wake, keyguard, and the `HookLog` seam |
 | hook | `.hook.config` | Reads remote prefs into a `core.config.Config` |
 | app | (root) | `Application` and `Activity` |
-| app | `.ui` | Screens, components, theme |
-| app | `.data` | XposedService client, launcher-app listing, config writer |
+| app | `.ui` | Screens, components, theme, and the screen's ViewModel and UI state |
+| app | `.data` | XposedService client (with the provider Vector hands its binder to), launcher-app listing and icons, device checks (double-press setting, tested builds), config writer |
 
 Debug-only developer tools, such as the adb config activity, live in `app/src/debug/` and never reach a release build.
 

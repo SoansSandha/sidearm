@@ -6,9 +6,11 @@ How Sidearm works as built. The design reasoning is in [plan.md](plan.md) §3 an
 
 ```
  app process (io.github.soanssandha.sidearm)        Vector daemon            system_server
- ┌──────────────────────────────────────┐   binder  ┌──────────────┐  push   ┌───────────────────────────────┐
- │ RemoteConfigStore ── XposedService ──┼──────────►│ remote prefs │────────►│ RemoteConfigReader            │
- │ (DevConfigActivity in debug builds)  │           │  "settings"  │         │   │ Config                    │
+ ┌──────────────────────────────────────┐ its binder┌──────────────┐         ┌───────────────────────────────┐
+ │ VectorBinderProvider ◄───────────────┼───────────┤ vectord,     │         │                               │
+ │ MainActivity ─ MainViewModel         │           │ system uid   │         │                               │
+ │   VectorModuleHost ── XposedService ─┼──────────►│ remote prefs │────────►│ RemoteConfigReader            │
+ │ (DevConfigActivity in debug builds)  │  writes   │  "settings"  │  push   │   │ Config                    │
  └──────────────────────────────────────┘           └──────────────┘         │   ▼                           │
                                                                              │ Sequencer ◄── hookers ◄── GestureLauncherService
                                                                              │   │ effects                   │
@@ -18,7 +20,7 @@ How Sidearm works as built. The design reasoning is in [plan.md](plan.md) §3 an
 ```
 
 - **system_server** runs the hook (`:hook`). Vector loads it from the APK at boot, with scope `system`.
-- **The app** (`:app`) writes the config through Vector's service. It runs only while the user has it open. Until Phase 4 the only writer is a debug-build activity driven from adb.
+- **The app** (`:app`) shows whether everything is in place and writes the config through Vector's service. It runs only while the user has it open. Debug builds also carry an activity that sets the config from adb.
 - **Vector** stores the config as remote preferences in its own database, and pushes each change into system_server.
 
 Nothing runs in the background: no service, receiver, job or wakelock. The only thread Sidearm starts reads the config once after boot and then ends (see below).
@@ -29,7 +31,7 @@ Nothing runs in the background: no service, receiver, job or wakelock. The only 
 |---|---|---|
 | `:core` | Pure Kotlin decisions. Fully unit-tested. | `reduce()` and its `State`/`Event`/`Effect`; `Config`, `ConfigKeys`, `ConfigCodec` |
 | `:hook` | Glue that runs in system_server. No libraries beyond `:core`. | See packages below |
-| `:app` | The APK: `META-INF/xposed/*`, the config writer, and the debug dev tool | `data.RemoteConfigStore`, `DevConfigActivity` (debug only) |
+| `:app` | The APK: `META-INF/xposed/*`, the config screen, and the debug dev tool | `MainActivity`, `ui.MainViewModel`, `data.VectorBinderProvider`, `data.VectorConnection`, `data.RemoteConfigStore`, `DevConfigActivity` (debug only) |
 
 `:hook` packages:
 
@@ -95,6 +97,57 @@ The launcher check queries system_server's own user (user 0), and the launch goe
 - During a dry run, stock opens the camera on press 2 as usual. Timers still run, so the sequencer's state tracks a real sequence, and press 3 only logs whether the target would open.
 - The mode is latched when a sequence's camera request arrives. A hold that began as a dry run never replays the camera, because stock has already opened it. A live hold always runs its camera or launch, even if dry run is switched on mid-hold. See [ADR 0006](decisions/0006-dry-run-latched-per-hold.md).
 
+## The config app
+
+One Compose screen, `MainActivity`, in the "status dashboard" design the owner picked (plan §5, Phase 4). From the top:
+- a status card holding the on/off switch and the one state that matters most, with its fix
+- the chosen app
+- a list of checks
+- what each press count does
+
+The app picker is a bottom sheet.
+
+**Getting Vector's service.** When the app process starts, Vector's daemon, `vectord`, calls the app's provider and hands it the service binder. It's started as root but runs as the system uid (1000), and that's the caller the provider sees (checked on the phone with Vector 2.2).
+- libxposed ships its own exported provider for this, which takes a binder from any caller, so any app could hand Sidearm a fake service. The manifest removes it.
+- `data.VectorBinderProvider` accepts only the system uid and root, which no third-party app can hold. It then passes the call to an attached instance of libxposed's provider class, which is final.
+- `data.VectorConnection` is the process's one listener (libxposed keeps only one) and exposes the service as a `StateFlow`. The screen and `DevConfigActivity` both use it.
+- The binder arrives only when the process starts, so after Vector restarts the app has to be reopened.
+
+**Where the checks come from.**
+
+| Check | Source |
+|---|---|
+| Vector connected, with name, version and API | The service binder. "Not connected" if none arrives within 3 s, or when it dies |
+| System Framework in scope | The service's `scope` contains `system` |
+| Loaded in system_server | `getRunningTargets()`: the entry for process `system` under uid 1000 is up to date, stale (an older install still running), reloading, or failed. No entry means it hasn't loaded since boot |
+| Double-press opens the camera | `Settings.Secure` and framework integers, read the way `GestureLauncherService` reads them ([hook-targets.md](hook-targets.md)) |
+| Tested on this build | `Build.FINGERPRINT` is in `data.TestedBuilds` |
+
+The app can't see whether the hook found its targets at boot; only the log says that. On an untested build it warns, rather than claiming the hook is on or off.
+
+**What the status card shows.** `ui.Hero` picks the first of these that applies, in the order a user would fix them:
+1. Connecting
+2. Not connected
+3. Off
+4. Not in scope
+5. Reboot needed (not loaded yet, or an older copy running)
+6. Couldn't load
+7. Choose an app
+8. App not found
+9. Paused (double-press isn't Camera)
+10. Dry run
+11. Active
+
+The checks card lists every condition either way, so a problem shows even while the feature is off.
+
+**Threads.** `ui.MainViewModel` runs every Vector call on one background lane (`Dispatchers.IO.limitedParallelism(1)`), in order.
+- A write re-reads the stored config, applies the change and writes the result. A refresh can't overwrite it, and a change made over adb meanwhile (such as dry run) isn't lost.
+- Writes aren't optimistic: the switch moves once Vector has taken the change, and a failed write shows a snackbar.
+- The app list loads separately, so it never waits behind Vector.
+- The screen reads everything again on every `onResume`, since the user may be back from Settings or the Vector manager.
+
+**Nothing in the background.** The release manifest has one activity and one provider, plus AndroidX's startup provider, which isn't exported and runs only inside the app's own process. AndroidX's `ProfileInstallReceiver` is removed. The app keeps no data of its own, and its data-extraction rules exclude everything from backup and device transfer.
+
 ## Logging
 
 `adb logcat -s Sidearm` shows:
@@ -119,7 +172,8 @@ If the new generation fails to install, it unhooks everything, so the button is 
 bash scripts/dev-install.sh               # build, install, hot reload
 adb logcat -s Sidearm SidearmDev          # hook lines, dev-tool lines
 
-# Debug builds only: set the config (extras are the config keys; unset ones keep their value).
+# Debug builds only: set the config from adb, e.g. for scripts or dry run, which the app doesn't show
+# (extras are the config keys; unset ones keep their value).
 adb shell am start -n io.github.soanssandha.sidearm/.DevConfigActivity \
     --ez enabled true --es target_component <package>/<activity> --ez dry_run true
 adb shell am start -n io.github.soanssandha.sidearm/.DevConfigActivity    # report the stored config

@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kover) apply false
     alias(libs.plugins.spotless)
 }
@@ -17,7 +18,11 @@ spotless {
     kotlin {
         target("**/*.kt")
         targetExclude(*excluded)
-        ktlint(ktlintVersion)
+        // Compose names composable functions like types (MainScreen). ktlint doesn't pick this property up from
+        // .editorconfig through Spotless, so it's set here; .editorconfig carries it for the IDE.
+        ktlint(ktlintVersion).editorConfigOverride(
+            mapOf("ktlint_function_naming_ignore_when_annotated_with" to "Composable"),
+        )
     }
     kotlinGradle {
         target("**/*.gradle.kts")

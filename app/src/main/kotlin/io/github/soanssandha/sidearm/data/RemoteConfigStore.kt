@@ -1,5 +1,6 @@
 package io.github.soanssandha.sidearm.data
 
+import android.annotation.SuppressLint
 import io.github.libxposed.service.XposedService
 import io.github.soanssandha.sidearm.core.config.Config
 import io.github.soanssandha.sidearm.core.config.ConfigCodec
@@ -15,6 +16,7 @@ class RemoteConfigStore(private val service: XposedService) {
     fun read(): Config = ConfigCodec.decode(service.getRemotePreferences(ConfigKeys.GROUP).all)
 
     /** Stores [config]. Returns false if Vector didn't take the write. This makes a binder call too. */
+    @SuppressLint("UseKtx") // The KTX edit {} drops commit()'s result, which says whether Vector took the write.
     fun write(config: Config): Boolean {
         val editor = service.getRemotePreferences(ConfigKeys.GROUP).edit()
         ConfigCodec.encode(config).forEach { (key, value) ->
