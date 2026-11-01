@@ -15,13 +15,14 @@ import io.github.soanssandha.sidearm.core.sequencer.reduce
  * result is recorded in [outcomes].
  *
  * With [cancelledTimersStillFire], a cancelled timer is delivered anyway, as when the handler had already picked it
- * up before the cancel landed.
+ * up before the cancel landed. [startedLocked] is what the hook reports with each camera request.
  */
 class SequenceDriver(
     private var config: Config,
     private val timing: Timing = Timing(),
     private val cameraDoublePress: Boolean = true,
     private val cancelledTimersStillFire: Boolean = false,
+    private val startedLocked: Boolean = true,
 ) {
     private val stock = StockTapCounter(timing.windowMs)
     private val pendingTimers = mutableMapOf<Long, Long>()
@@ -35,7 +36,9 @@ class SequenceDriver(
     fun press(at: Long, interactive: Boolean = true, seenAfterMs: Long = 0) {
         advanceTo(at + seenAfterMs)
         val taps = stock.count(at)
-        if (cameraDoublePress && taps == CAMERA_TAPS) dispatch(Event.CameraRequested(pressTime = at, camera = CAMERA))
+        if (cameraDoublePress && taps == CAMERA_TAPS) {
+            dispatch(Event.CameraRequested(pressTime = at, camera = CAMERA, startedLocked = startedLocked))
+        }
         dispatch(Event.PowerDown(eventTime = at, taps = taps, interactive = interactive))
     }
 

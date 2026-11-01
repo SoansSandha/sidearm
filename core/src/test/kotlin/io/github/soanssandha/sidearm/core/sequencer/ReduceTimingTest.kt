@@ -65,9 +65,9 @@ class ReduceTimingTest {
     }
 
     @Test
-    fun `third press that reaches the hook after the deadline opens the camera and is still consumed`() {
+    fun `third press that reaches the hook after the deadline opens the camera, then the target over it`() {
         assertEquals(
-            listOf(Outcome.CameraOpened(10_500), Outcome.PressConsumed(10_445)),
+            listOf(Outcome.CameraOpened(10_500), Outcome.PressConsumed(10_445), Outcome.TargetLaunched(target, 10_505)),
             tripleWithGap(gapMs = 295, seenAfterMs = 60),
         )
     }
@@ -188,6 +188,55 @@ class ReduceTimingTest {
         driver.advanceTo(END)
 
         assertEquals(listOf(Outcome.CameraOpened(10_200)), driver.outcomes)
+    }
+
+    // An unlocked phone: the camera is never held (ADR 0007).
+
+    private fun unlocked(vararg presses: Long): List<Outcome> {
+        val driver = SequenceDriver(armed, startedLocked = false)
+        presses.forEach(driver::press)
+        driver.advanceTo(END)
+        return driver.outcomes
+    }
+
+    @Test
+    fun `unlocked, a double press opens the camera at once, as in stock`() {
+        assertEquals(listOf(Outcome.CameraOpened(PRESS_2)), unlocked(PRESS_1, PRESS_2))
+    }
+
+    @Test
+    fun `unlocked, a triple opens the camera at press 2 and the target over it at press 3`() {
+        assertEquals(
+            listOf(
+                Outcome.CameraOpened(PRESS_2),
+                Outcome.PressConsumed(10_445),
+                Outcome.TargetLaunched(target, 10_445),
+            ),
+            unlocked(PRESS_1, PRESS_2, PRESS_2 + 295),
+        )
+    }
+
+    @Test
+    fun `unlocked, a third press 300 ms after the second is a new press, left to stock`() {
+        assertEquals(listOf(Outcome.CameraOpened(PRESS_2)), unlocked(PRESS_1, PRESS_2, PRESS_2 + 300))
+    }
+
+    @Test
+    fun `unlocked, presses 4 and 5 after a triple are left to stock, so Emergency SOS still sees them`() {
+        assertEquals(
+            listOf(Outcome.CameraOpened(10_150), Outcome.PressConsumed(10_300), Outcome.TargetLaunched(target, 10_300)),
+            unlocked(10_000L, 10_150, 10_300, 10_450, 10_600),
+        )
+    }
+
+    @Test
+    fun `unlocked, with the feature off a triple is left entirely to stock`() {
+        val driver = SequenceDriver(Config.DEFAULT, startedLocked = false)
+
+        listOf(PRESS_1, PRESS_2, PRESS_2 + 150).forEach(driver::press)
+        driver.advanceTo(END)
+
+        assertEquals(listOf(Outcome.CameraOpened(PRESS_2)), driver.outcomes)
     }
 
     private companion object {

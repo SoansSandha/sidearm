@@ -74,4 +74,17 @@ class TargetComponentTest {
         assertFailsWith<IllegalArgumentException> { TargetComponent("app", "app.Main") }
         assertFailsWith<IllegalArgumentException> { TargetComponent("com.example.app", ".Main") }
     }
+
+    @Test
+    fun `rejects strings longer than any real component before matching them`() {
+        // Thousands of segments would overflow the regex engine's stack instead of failing to match.
+        val huge = "com" + ".a".repeat(100_000)
+
+        assertNull(TargetComponent.parse("$huge/$huge.Main"))
+        assertFailsWith<IllegalArgumentException> { TargetComponent(huge, "$huge.Main") }
+        val longest = "com.example/com.example." + "A".repeat(TargetComponent.MAX_FLAT_LENGTH - 24)
+        assertEquals(TargetComponent.MAX_FLAT_LENGTH, longest.length)
+        assertEquals(longest, TargetComponent.parse(longest)?.flatten())
+        assertNull(TargetComponent.parse(longest + "A"))
+    }
 }

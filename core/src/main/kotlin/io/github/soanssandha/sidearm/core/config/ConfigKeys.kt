@@ -12,4 +12,7 @@ object ConfigKeys {
 
     /** A [TargetComponent.flatten] string. */
     const val TARGET_COMPONENT = "target_component"
+
+    /** See [Config.dryRun]. */
+    const val DRY_RUN = "dry_run"
 }

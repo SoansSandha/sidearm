@@ -15,7 +15,10 @@ spotless = "8.10.4"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+# Android modules name the JUnit 5 variant; the Kotlin JVM plugin infers it for kotlin-test, AGP's Kotlin doesn't.
+kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5", version.ref = "kotlin" }
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed" }
+libxposed-service = { module = "io.github.libxposed:service", version.ref = "libxposed" }
 
 # Compile-only dependencies of the build-logic convention plugins.
 android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }

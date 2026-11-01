@@ -17,7 +17,10 @@ android {
 }
 
 dependencies {
+    implementation(project(":core"))
     // Packaged into the APK for Vector to load, but not importable: the UI and the hook run in different processes.
     runtimeOnly(project(":hook"))
     compileOnly(libs.libxposed.api)
+    // The app's side of Vector: its service binder and the remote preferences the hook reads.
+    implementation(libs.libxposed.service)
 }

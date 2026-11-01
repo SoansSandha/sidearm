@@ -24,15 +24,15 @@ Every package starts with `io.github.soanssandha.sidearm`.
 | core | `.core.sequencer` | `State`, `Event`, `Effect`, `reduce()` |
 | core | `.core.config` | `Config`, `ConfigKeys`, `ConfigCodec` |
 | hook | `.hook` | The `SidearmModule` entry class only |
-| hook | `.hook.intercept` | One `Hooker` per hooked framework method |
+| hook | `.hook.intercept` | One `Hooker` per hooked framework method, and the input-side state they share (`SequenceStart`) |
 | hook | `.hook.target` | `*Targets` classes: reflection handles per framework class, resolved once, all-or-nothing |
-| hook | `.hook.effect` | Runs reducer effects: timers, app launch, wake, keyguard |
+| hook | `.hook.effect` | Runs the reducer and its effects: the hook-side `Sequencer` (state, lock, dry-run latch), timers, app launch, wake, keyguard, and the `HookLog` seam |
 | hook | `.hook.config` | Reads remote prefs into a `core.config.Config` |
 | app | (root) | `Application` and `Activity` |
 | app | `.ui` | Screens, components, theme |
 | app | `.data` | XposedService client, launcher-app listing, config writer |
 
-The Phase 0 probe (`hook/SidearmModule.kt`, `hook/GestureLauncherTargets.kt`) is exempt until Phase 2 replaces it.
+Debug-only developer tools, such as the adb config activity, live in `app/src/debug/` and never reach a release build.
 
 ## Files
 

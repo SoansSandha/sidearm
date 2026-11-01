@@ -25,6 +25,9 @@ sealed interface Effect {
     /** Wake the device with `WAKE_REASON_POWER_BUTTON`; the press came while it wasn't interactive. */
     data object WakeDevice : Effect
 
-    /** Open [target] (through the unlock prompt if the keyguard is showing), or the camera if it no longer resolves. */
-    data class LaunchTarget(val target: TargetComponent, val fallback: CameraArgs) : Effect
+    /**
+     * Open [target] (through the unlock prompt if the keyguard is showing). If it can't be opened, run the [fallback]
+     * camera instead; there's none when the camera has already run.
+     */
+    data class LaunchTarget(val target: TargetComponent, val fallback: CameraArgs?) : Effect
 }
