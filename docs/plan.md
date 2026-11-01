@@ -1,14 +1,14 @@
 # Implementation plan: Sidearm (triple-press launcher)
 
-App name **Sidearm**, applicationId `io.github.soanssandha.sidearm`. Written 2026-10-29. The ECC `architect` agent reviewed it against the Android 17 source the same day; review fixes are included. Phase 0 finished the same day, and its findings are folded in below (see also `docs/hook-targets.md`). Phase 1 finished 2026-10-30.
+App name **Sidearm**, applicationId `io.github.soanssandha.sidearm`. Written 2026-10-29. The ECC `architect` agent reviewed it against the Android 17 source the same day; review fixes are included. Phase 0 finished the same day, and its findings are folded in below (see also `docs/hook-targets.md`). Phase 1 finished 2026-10-30, Phase 2 on 2026-10-31, and Phase 3 on 2026-11-01. Phase 4, the config app, was built, reviewed and checked on the phone on 2026-11-01; a few manual checks remain (`docs/testing.md`). How the built system works is in `docs/architecture.md`.
 
 ## 1. Behaviour contract
 
 | Presses | Result | Changed? |
 |---|---|---|
 | 1 | Screen on/off | No |
-| 2 | Camera, opening about 350 ms after press 2 instead of immediately | Timing only |
-| 3 | Chosen app. If the phone is locked, the unlock prompt shows first. | New |
+| 2 | Camera. From an unlocked phone it opens at once, as in stock; from a locked one, about 350 ms after press 2 | Timing only, and only when locked |
+| 3 | Chosen app. From an unlocked phone the camera shows for about a tenth of a second first. If the phone was locked, the unlock prompt shows first (Phase 3). | New |
 | 4 | Same as stock: nothing if Emergency SOS is on, a screen toggle if it's off | No |
 | 5 | Emergency SOS | No |
 | Long press | Assistant or power menu | No |
@@ -16,11 +16,14 @@ App name **Sidearm**, applicationId `io.github.soanssandha.sidearm`. Written 202
 Rhythm: each press must land within 300 ms of the previous one, which is Android's own `POWER_DOUBLE_TAP_MAX_TIME_MS`. Slower presses count as new single presses, exactly as in stock. The triple only works while the stock double-press is set to Camera. If double-press is off or set to Wallet, the module does nothing, and the config app says so.
 
 ```
-press:    1 ──<300ms── 2 ──<300ms── 3
-stock:    screen       camera       (screen toggle, or swallowed if SOS is on)
-module:   screen       hold camera  cancel camera → open chosen app
-                       └─ 350 ms (300 + 50 grace) with no press 3 → open camera
+press:             1 ──<300ms── 2 ──<300ms── 3
+stock:             screen       camera       (screen toggle, or swallowed if SOS is on)
+module, locked:    screen       hold camera  cancel camera → open chosen app (unlock prompt first)
+                                └─ 350 ms (300 + 50 grace) with no press 3 → open camera
+module, unlocked:  screen       camera       open chosen app over the camera
 ```
+
+Why it depends on the lock (ADR 0007): holding the camera on an unlocked phone makes SystemUI lock it, because SystemUI only skips the lock after press 1's screen-off if it sees the camera request before the screen wakes. "Locked" means the keyguard was showing at press 1.
 
 The module adds no background service, receiver, job or wakelock. The hook lives in `system_server`, which is always running anyway. The only extra work is one delayed message after a double-press.
 
@@ -41,6 +44,10 @@ The module adds no background service, receiver, job or wakelock. The hook lives
 | In Android 17, `GestureLauncherService.interceptPowerKeyDown` counts taps in `mPowerButtonConsecutiveTaps`. Press 2 calls `handleCameraGesture(false, CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)`; press 5 calls `handleEmergencyGesture()`. The sensor gestures call `handleCameraGesture(true, <other source>)`. | `android17-release` frameworks/base, GLS L647–785, L850, L988, L1073 | Verified (source) |
 | PhoneWindowManager treats the press as consumed (no screen toggle, no wake) when GestureLauncherService returns `true` **or** sets `outLaunched`. When `outLaunched` is set, PhoneWindowManager also wakes early if the screen is going to sleep, and tells the keyguard that a launch gesture fired, which stops it from locking. | PWM L4917–4952, L1081–1087, L5409, L5454 | Verified (source) |
 | PhoneWindowManager already has a "launch, or unlock then launch" path: `mKeyguardDelegate.isShowing() ? mKeyguardDelegate.dismissKeyguardToLaunch(intent) : startActivityAsUser(…)`. | PWM L1436–1446 | Verified (source) |
+| **Correction (2026-11-01):** on Android 17, SystemUI ignores `dismissKeyguardToLaunch`: `KeyguardService.dismissKeyguardToLaunch` only logs "Ignoring dismissKeyguardToLaunch". The unlock route that still works is `PhoneWindowManager.dismissKeyguardLw(IKeyguardDismissCallback, CharSequence)` → `KeyguardViewMediator.dismiss` → `StatusBarKeyguardViewManager.dismissAndCollapse()` → `ActivityStarter.executeRunnableDismissingKeyguard`. That's the flow the Wallet tile uses, and it shows the fingerprint overlay (alternate bouncer) when fingerprint is enrolled. | SystemUI `KeyguardService` L698, `KeyguardViewMediator` L2694, `StatusBarKeyguardViewManager`; on CP3A, `dismissKeyguardLw` and `IKeyguardDismissCallback$Stub` (`DESCRIPTOR`, `TRANSACTION_on*`, `asInterface`) dexdump-verified | Verified (source + device jars) |
+| libxposed's `XposedProvider` is `final`, exported, and accepts a `SendBinder` call from any caller. Its `onCreate` sets `RemotePreferences.shouldNotifyCleared` for apps targeting API 30+. Vector's daemon, `vectord`, delivers the binder by calling the provider itself (`getContentProviderExternal`). It's started as root but runs as the system uid, so the provider sees uid 1000. | libxposed service 102.0.0 bytecode; Vector `ModuleAppService.sendBinder`; on device (`ps`, the provider's log) | Verified (bytecode + source + device) |
+| The app's service reports where the module is loaded: `getRunningTargets()` lists system_server as process `system` under uid 1000, with state UP_TO_DATE, STALE, RELOADING or FAILED. | libxposed service 102.0.0; Vector `FrameworkService` | Verified (source) |
+| The double-press `Settings.Secure` keys (`double_tap_power_button_gesture_enabled`, `double_tap_power_button_gesture`, `camera_double_tap_power_gesture_disabled`) are `@Readable`, so an app can read them. The Settings page has the exported action `android.settings.action.DOUBLE_TAP_POWER_SETTINGS`. | `android17-release` `Settings.java`, Settings `AndroidManifest.xml` | Verified (source) |
 | Starting in 2026, Google publishes AOSP source only in Q2 and Q4. Android 17 QPR1 builds such as CP3A.261005.005 can differ from `android17-release`. **The `services.jar` of the target build is the source of truth.** | [Android Authority](https://androidauthority.com/aosp-source-code-schedule-3630018/) | Verified |
 
 ## 3. Design
@@ -51,10 +58,12 @@ There are two hooks, both in `com.android.server.GestureLauncherService`. Nothin
 
 | Method (Android 17) | What our interceptor does |
 |---|---|
-| `boolean interceptPowerKeyDown(KeyEvent, boolean interactive, MutableBoolean outLaunched)` | 1. Records the event time, then calls `chain.proceed()` **exactly once**, outside any try block, and keeps the result. 2. Runs our own logic inside `try/catch`, and any failure returns the kept result. 3. If stock actually counted this press (checked with `mLastPowerDown == event.eventTime`), it passes the press and `mPowerButtonConsecutiveTaps` to the state machine. 4. On a recognised third press it returns `true`, so PhoneWindowManager consumes the press and the screen doesn't toggle. It leaves `outLaunched` alone, so the keyguard isn't told a launch gesture fired. If `!interactive`, it also wakes the device with `WAKE_REASON_POWER_BUTTON`. Don't use `WAKE_REASON_GESTURE`, because that blocks the next power press from turning the screen off (PWM L1366–1376). |
-| `boolean handleCameraGesture(boolean useWakelock, int source)` | Only acts when `source == CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP`; other sources, such as camera-lift, pass straight through. If the feature is armed, it skips the original, schedules it for later, and returns `true`. PhoneWindowManager then sees exactly what it sees in stock: "launched", so it wakes early and doesn't lock. |
+| `boolean interceptPowerKeyDown(KeyEvent, boolean interactive, MutableBoolean outLaunched)` | 1. Calls `chain.proceed()` **exactly once**, outside any try block, and keeps the result. (The camera hook learns press 2's time from `mLastPowerDown`, which stock sets before it asks for the camera.) 2. Runs our own logic inside `try/catch`, and any failure returns the kept result. 3. If stock actually counted this press (checked with `mLastPowerDown == event.eventTime`), it passes the press and `mPowerButtonConsecutiveTaps` to the state machine. 4. On a recognised third press it returns `true`, so PhoneWindowManager consumes the press and the screen doesn't toggle. It leaves `outLaunched` alone, so the keyguard isn't told a launch gesture fired. If `!interactive`, it also wakes the device with `WAKE_REASON_POWER_BUTTON`. Don't use `WAKE_REASON_GESTURE`, because that blocks the next power press from turning the screen off (PWM L1366–1376). |
+| `boolean handleCameraGesture(boolean useWakelock, int source)` | Only acts when `source == CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP`; other sources, such as camera-lift, pass straight through. If the feature is armed and the phone was locked at press 1, it skips the original, schedules it for later, and returns `true`. PhoneWindowManager then sees exactly what it sees in stock: "launched", so it wakes early. On an unlocked phone it runs the original at once (ADR 0007). |
 
-Why press 2 still reports "launched": PhoneWindowManager uses that report to wake the screen early and to stop the keyguard locking while press 1's screen-off is in progress. Reporting it exactly as stock does keeps presses 1–2 identical to today. The only thing that moves is when SystemUI is told to open the camera.
+Why a held press 2 still reports "launched": PhoneWindowManager uses that report to wake the screen early. On a locked phone the keyguard ends up the same either way, so the only thing that moves is when SystemUI is told to open the camera. On an unlocked phone that's not enough, and holding would lock it (ADR 0007), so the camera isn't held there.
+
+"Locked at press 1": the power hook records `KeyguardServiceDelegate.isShowing()` (a cached flag) whenever stock counts a first press. By press 2, press 1's screen-off already makes the keyguard report itself showing, even on a phone that was unlocked.
 
 Why press 3 has to return `true`: with Emergency SOS off, stock returns `false` on press 3, and PhoneWindowManager would treat it as a normal press and turn the screen off.
 
@@ -66,13 +75,15 @@ Inlining: ART may have compiled `handleCameraGesture` inline into `interceptPowe
 
 All decisions live in a pure reducer, `reduce(state, event, config, timing) -> Transition(state, effects)` in `:core` (`core.sequencer`), which uses no Android or Xposed types. `config` is the current settings snapshot and `timing` holds `W` and `G`. The hook layer only turns calls into events and runs the effects. `ReduceTest` has one test per row below; `ReduceTimingTest` plays whole press sequences on a fake clock, with a fake of stock's tap counting.
 
-States: `Idle(lastFlushedPress)`, `HoldingCamera(camera, pressTime, deadline, generation)`. "Armed" means enabled with a valid target.
+States: `Idle(lastCameraPress)`, `HoldingCamera(camera, pressTime, deadline, generation)`. "Armed" means enabled with a valid target. `CameraRequested` carries `startedLocked`, whether the keyguard was showing at press 1.
 
 | State | Event | Condition | Next | Effects |
 |---|---|---|---|---|
-| Idle | CameraRequested(t2) | armed | HoldingCamera | Schedule(t2 + W + G); tell stock "launched" |
-| Idle | CameraRequested | otherwise | Idle | Run stock now |
-| Idle | PowerDown(taps = 3) | less than W after `lastFlushedPress` | Idle | ConsumePress, whatever the config. The held camera is already opening (the timer won the race, or the feature was turned off mid-hold); this only stops a screen toggle. No wake: the camera launch wakes the device. |
+| Idle | CameraRequested(t2) | armed, started locked | HoldingCamera | Schedule(t2 + W + G); tell stock "launched" |
+| Idle | CameraRequested(t2) | armed, started unlocked | Idle(lastCameraPress = t2) | Run stock now (ADR 0007) |
+| Idle | CameraRequested | not armed | Idle | Run stock now |
+| Idle | PowerDown(taps = 3) | less than W after `lastCameraPress`, armed | Idle | ConsumePress; WakeDevice if not interactive; LaunchTarget with no fallback. The camera is already opening (the phone was unlocked, or the timer won the race), so the target opens over it. |
+| Idle | PowerDown(taps = 3) | less than W after `lastCameraPress`, not armed | Idle | ConsumePress only: the camera is opening (e.g. the feature was turned off mid-hold), so this just stops a screen toggle |
 | Idle | anything else | | Idle | none: stock handles the press |
 | HoldingCamera | PowerDown of press 2 itself | event time = `pressTime` | unchanged | none. Stock asks for the camera *during* press 2, so press 2 reaches the reducer after the hold began. |
 | HoldingCamera | PowerDown(taps = 3) | still armed | Idle | Cancel timer; ConsumePress; WakeDevice if not interactive; LaunchTarget (with the held camera as fallback) |
@@ -83,9 +94,10 @@ States: `Idle(lastFlushedPress)`, `HoldingCamera(camera, pressTime, deadline, ge
 | HoldingCamera | CameraRequested | shouldn't happen | Idle(t2) | Cancel timer; RunHeldCamera; run stock now |
 | any | Timer(stale gen) | | unchanged | none |
 
-- `W` is read from stock's `POWER_DOUBLE_TAP_MAX_TIME_MS` by reflection, with 300 as the fallback. `G` is a 50 ms grace period.
+- `W` is read from stock's `POWER_DOUBLE_TAP_MAX_TIME_MS` by reflection. If it can't be read, nothing is installed, the same as for any other missing target. `G` is a 50 ms grace period.
+- Dry run (Phase 2): the hook-side sequencer latches the config's `dry_run` when a sequence's camera request arrives, and every effect of that sequence follows it. During a dry run, stock handles every press and the sequencer only logs (ADR 0006).
 - Stock counts press 3 by its *event time*, but our hook only sees the event a few milliseconds later. Without `G`, a press at t2+295 that we handle at t2+303 would lose to the timer.
-- `lastFlushedPress` records *which* press 2 the camera came from, not when it ran. A counted press 3 always has an event time before the deadline, so comparing it with the flush time could never match; comparing it with press 2 works however late the hook sees press 3.
+- `lastCameraPress` records *which* press 2 the camera came from, not when it ran. A counted press 3 always has an event time before the deadline, so comparing it with the flush time could never match; comparing it with press 2 works however late the hook sees press 3.
 - Deadlines use the key event's uptime clock: `Handler.postAtTime(r, token, deadline)`.
 
 Concurrency: key events arrive on the input thread and timers fire on a handler thread. The reducer runs under one lock and is cheap. Generation numbers make a timer that lost a race into a no-op. Effects run *after* the lock is released. Never hold it while calling `proceed()` or the original method.
@@ -96,9 +108,9 @@ SOS guard: an option to hold the app launch for another W after press 3, so pres
 
 ### 3.3 Launching the chosen app
 
-1. Run on an existing system_server looper, such as the main looper or `FgThread`, never on the input thread, and create no new threads. Starting an activity inside `interceptKeyBeforeQueueing` risks input lag and lock-order deadlocks. The wake in §3.1 is the exception: PhoneWindowManager already wakes from the input thread.
-2. Build the intent from the stored component with `FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED`, the same flags PhoneWindowManager uses. If it no longer resolves, run the camera instead so the press still does something, and log it.
-3. Reuse PhoneWindowManager's own path. Get the PWM instance with `LocalServices.getService(WindowManagerPolicy.class)` (WindowManagerService registers it; verified on device), then read its `mKeyguardDelegate`. Check `isShowing()` **at launch time**, not at press time. If the keyguard is showing, call `dismissKeyguardToLaunch(intent)`: SystemUI shows the bouncer (face unlock can satisfy it) and then starts the app. If it isn't showing, call `startActivityAsUser(intent, UserHandle.CURRENT)`. Checking late covers the case where face unlock finishes between press 1 and press 3.
+1. Run on an existing system_server looper (the main looper), never on the input thread. Starting an activity inside `interceptKeyBeforeQueueing` risks input lag and lock-order deadlocks. The wake in §3.1 is the exception: PhoneWindowManager already wakes from the input thread. The only thread Sidearm creates reads the config once after boot and ends (§3.4).
+2. Build a launcher intent (`MAIN`/`LAUNCHER`) for the stored component with `FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED`, the same flags PhoneWindowManager uses. Open it only if it's one of its package's enabled, exported launcher activities, because system_server can start any activity, even an unexported one. If it isn't, run the camera instead so the press still does something, and log it.
+3. Reuse PhoneWindowManager's own path. Get the PWM instance with `LocalServices.getService(WindowManagerPolicy.class)` (WindowManagerService registers it; verified on device), then read its `mKeyguardDelegate`. Check `isShowing()` **at launch time**, not at press time. If the keyguard is showing, ask SystemUI to unlock and then start the app. `dismissKeyguardToLaunch(intent)` was the plan, but Android 17's SystemUI ignores it (§2 correction). Phase 3 instead calls `dismissKeyguardLw(callback, null)`, 400 ms after press 3 so SystemUI has finished waking and can offer the fingerprint overlay, and not at all if another press followed (ADR 0008). That shows the fingerprint overlay or bouncer the way the Wallet tile does (face unlock can satisfy it too), and starts the app from `onDismissSucceeded`. If the unlock is cancelled, nothing opens, the same as Wallet. The callback is a plain `Binder` that handles the `TRANSACTION_on*` codes, read by reflection at boot and wrapped with `IKeyguardDismissCallback.Stub.asInterface`, so no hidden-API stubs are needed. If it isn't showing, call PWM's private `startActivityAsUser(intent, UserHandle.CURRENT_OR_SELF)`, as its double-press-to-app setting does. Checking late covers the case where face unlock finishes between press 1 and press 3.
 4. system_server is exempt from background-activity-start limits, so no special permission is needed.
 
 ### 3.4 Config
@@ -107,23 +119,28 @@ SOS guard: an option to hold the app launch for another W after press 3, so pres
 |---|---|---|
 | `enabled` | Boolean | false |
 | `target_component` | String (`ComponentName.flattenToString()`) | none |
+| `dry_run` | Boolean | false (added in Phase 2, ADR 0006) |
 
-- The hook reads prefs lazily and keeps an immutable `Config` snapshot in a volatile field. An `OnSharedPreferenceChangeListener` rebuilds the snapshot, so changes apply without a reboot. Values are validated, and anything invalid counts as `enabled = false`.
-- The config app is one Compose screen with:
-  - A status line showing:
-    - whether Vector is connected, with its version and API
-    - whether system_server is in scope
-    - whether stock double-press is set to Camera
-  - An on/off switch.
-  - A searchable list of launcher activities with icons. It uses a `<queries>` entry for `MAIN/LAUNCHER`, so `QUERY_ALL_PACKAGES` isn't needed.
+- The hook reads prefs once after boot, on a short-lived thread, because opening them is a blocking binder call to Vector. It retries a few times if Vector isn't ready. An `OnSharedPreferenceChangeListener` then hands each new snapshot to the main looper, so changes apply without a reboot. Values are validated, and anything invalid counts as `enabled = false`.
+- Until the config app exists, debug builds carry `DevConfigActivity`, which writes the config from `adb shell am start` extras. It needs `android.permission.DUMP`, so only adb can start it (ADR 0006, `docs/architecture.md`). The config writer, `data.RemoteConfigStore`, arrived in Phase 2 for the same reason.
+- The config app (built in Phase 4, the owner's design variant B) is one Compose screen with:
+  - A status card holding the on/off switch and the most important state, with its fix: off, not connected, not in scope, reboot needed, choose an app, app not found, paused because double-press isn't Camera, or active.
+  - A checks card listing each condition:
+    - Vector connected, with its version and API
+    - System Framework in scope
+    - the module loaded and up to date in system_server
+    - stock double-press set to Camera
+    - an Android build the hook targets were checked on
+  - The chosen app, and a bottom sheet to change it: a searchable list of launcher activities with icons. It uses a `<queries>` entry for `MAIN/LAUNCHER`, so `QUERY_ALL_PACKAGES` isn't needed.
+  - What each press count does.
 
-  The app has no services, receivers or WorkManager, and needs no root.
+  The app has no services, receivers or WorkManager, and needs no root. Dry run stays in the debug-only `DevConfigActivity`. How it works is in `docs/architecture.md`.
 
 ### 3.5 Safety nets
 
 | Failure | What happens |
 |---|---|
-| A method, field, or the call site is missing at boot (an OTA changed it) | No hooks are installed and one log line is written. Stock camera, SOS and everything else keep working. The config app shows "inactive on this build". |
+| A method, field, or the call site is missing at boot (an OTA changed it) | No hooks are installed and one log line is written. Stock camera, SOS and everything else keep working. The config app can't see the hook's install result, so it warns whenever the build isn't one whose targets were checked (`TestedBuilds`). |
 | Our interceptor logic throws | The `try/catch` returns the result `proceed()` already produced. The original is never run twice (see §3.1). |
 | Target app uninstalled or not launchable | Press 3 opens the camera instead. |
 | Timer never fires (shouldn't happen) | The next power press runs the held camera. |
@@ -139,7 +156,7 @@ SOS guard: an option to hold the app launch for another W after press 3, so pres
 | Accessibility service, or reading `/dev/input` as root | Needs a background process, which goes against the battery goal. The power key also isn't reliably delivered to accessibility services. |
 | Hooking SystemUI's camera launch | A second scope and process, and system_server has already committed to the camera by then. |
 | Toggling `mCameraDoubleTapPowerEnabled` | Mutates stock state and races with the settings observer. |
-| Our own `IKeyguardDismissCallback` with hidden-API stubs | PhoneWindowManager's `dismissKeyguardToLaunch` already does this with no extra module. |
+| ~~Our own `IKeyguardDismissCallback` with hidden-API stubs~~ | Was rejected because PhoneWindowManager's `dismissKeyguardToLaunch` did the same with no extra module. **Reversed 2026-11-01:** Android 17's SystemUI ignores `dismissKeyguardToLaunch`, so Phase 3 implements the callback after all, as a plain `Binder` with no stubs (§3.3). |
 | Legacy Xposed API | Works in Vector, but API 102 gives live remote prefs, hot reload and proper invokers. |
 
 ## 4. Repo structure
@@ -169,16 +186,17 @@ sidearm/
 ├─ build-logic/               # convention plugins: sidearm.android.application,
 │                             #   sidearm.android.library, sidearm.jvm.library
 ├─ core/                      # pure Kotlin: press sequencer + config contract
-├─ hook/                      # system_server code: entry, intercept/, target/, effect/, config/ [Phase 2]
-├─ app/                       # the APK: packaging, META-INF/xposed, [Phase 4] config UI (ui/, data/)
+├─ hook/                      # system_server code: entry, intercept/, target/, effect/, config/
+├─ app/                       # the APK: packaging, META-INF/xposed, the config screen (ui/), data/ (Vector
+│                             #   client, config writer, app list, device checks), debug-only dev tool
 ├─ docs/
 │  ├─ plan.md                 # roadmap and status; design sections move out as phases finish
-│  ├─ architecture.md         # [Phase 2] how it works now: processes, modules, data flow
-│  ├─ decisions/              # ADRs: 0001 branching model; [Phase 2] those already made in §3.6 and §9
+│  ├─ architecture.md         # how it works now: processes, modules, data flow
+│  ├─ decisions/              # ADRs: 0001 branching model, 0002–0005 from §3.6 and §9, 0006 dry run, 0007 hold only when locked
 │  ├─ hook-targets.md         # verified framework signatures, one section per build
-│  └─ testing.md              # [Phase 3] device matrix, SOS procedure, post-OTA checklist (moved from §6)
+│  └─ testing.md              # device matrix, SOS procedure, post-OTA checklist (moved from §6)
 ├─ scripts/                   # dev-install, setup-repo, start-branch, check-repo-hygiene, check-conventions,
-│                             #   sync-ecc; [Phase 3] device-smoke
+│                             #   sync-ecc, device-smoke
 ├─ .githooks/                 # pre-commit, commit-msg, pre-push → check-repo-hygiene.sh, check-conventions.sh
 ├─ .github/                   # [Phase 5] workflows/ci.yml, workflows/release.yml, dependabot.yml,
 │                             #   PULL_REQUEST_TEMPLATE.md (pre-flight checklist)
@@ -196,9 +214,9 @@ Structure work by phase. It's spread out so each piece arrives when it first pay
 | Before going public ✅ | `LICENSE`, `THIRD_PARTY_NOTICES.md`, the README safety warning, the public-repo rules (fork PRs, untrusted contributions, GitHub settings) |
 | Phase 1 ✅ | `build-logic` with the three convention plugins; `:core`; Spotless + ktlint; Kover; SDK levels in the catalog; `./gradlew check` running everything; `:app` takes `runtimeOnly(project(":hook"))` (moved up from Phase 2) |
 | After Phase 1 ✅ | The branching model: a `develop` branch, `CONTRIBUTING.md`, ADR 0001 (so `docs/decisions/` starts early), `scripts/check-conventions.sh` in the commit-msg and pre-push hooks, and `scripts/start-branch.sh` for starting work from the latest `develop` |
-| Phase 2 | Reshape `:hook` into `intercept/`, `target/`, `effect/` and `config/` as the probe is replaced; `docs/architecture.md`; first ADRs extracted from §3.6 and §9 |
-| Phase 3 | `docs/testing.md` (§6 moves there); `scripts/device-smoke.sh` |
-| Phase 4 | `:app` `ui/` and `data/` packages; Compose configured in the application convention plugin |
+| Phase 2 (code done 2026-10-31) | Reshape `:hook` into `intercept/`, `target/`, `effect/` and `config/` as the probe is replaced; `docs/architecture.md`; first ADRs extracted from §3.6 and §9 (0002–0005), plus 0006 and 0007; local unit tests for `:hook` in the library convention plugin; `:app` `data/RemoteConfigStore` (moved up from Phase 4) and the debug-only `app/src/debug/` dev tool |
+| Phase 3 ✅ | `docs/testing.md` (§6 moves there); `scripts/device-smoke.sh` |
+| Phase 4 (built 2026-11-01) | `:app` `ui/` and `data/` packages; Compose and `:app` unit tests configured in the application convention plugin |
 | Phase 5 | `.github/` (CI running `./gradlew check` and the hygiene check, release workflow, Dependabot for Gradle and Actions, but not the ECC submodule, PR template); CI also checks PR titles against Conventional Commits; Dependabot targets `develop` with `build(deps)` commit prefixes; the release workflow runs on `vX.Y.Z` tags on `main`; `CHANGELOG.md`; release versioning |
 | Public-repo settings ✅ (2026-10-31; the repo was already public) | The GitHub settings in the rules' §9: secret scanning, push protection, Dependabot alerts, private vulnerability reporting, and rulesets on `main`, `develop` and `v*` tags |
 
@@ -220,40 +238,23 @@ After each phase, run the ECC `code-reviewer` and `kotlin-reviewer` agents on th
 |---|---|---|---|
 | 0 ✅ | Decide and verify (done 2026-10-29) | Sidearm / `io.github.soanssandha.sidearm`. Device jars checked with `dexdump` (no jadx needed) and recorded in `docs/hook-targets.md`. Scope `system`, the PWM route, and `ExceptionMode` all confirmed. A log-only probe in `:hook` verified them on a device. | Met: the probe logs taps 1/2/3 and `handleCameraGesture(false, 1)` from inside system_server. Hot reload works when versionCode changes (`scripts/dev-install.sh`). `input keyevent` presses do go through GestureLauncherService (`device=-1`). |
 | 1 ✅ | Build conventions + core reducer, test-first (done 2026-10-30) | First, the `build-logic` convention plugins, Spotless + ktlint, Kover and `./gradlew check` (§4). Then `:core`, with every row of §3.2 as a test, plus timing edges (295/299/300/349/351 ms), timer races, flush paths, and the config contract and its validation. | Met: `./gradlew check` is green (formatting, lint on `:app` and `:hook`, tests, Kover gate). `:core` has 58 tests and 100% line and branch coverage; both gates are 80%. |
-| 2 | Hook glue: dry run, then camera | `:hook` reshaped into its target packages (§4). Target resolvers with feature detection. The interceptors first run in **dry-run** mode, logging what they would do and always proceeding with stock, then for real with unlocked-phone launches only. `docs/architecture.md` and the first ADRs. | A few dozen real 1/2/3 presses match the dry-run logs. On real runs: triple opens the app unlocked, double opens the camera about 350 ms later, and single is unchanged. |
-| 3 | Lock screen and SOS | `dismissKeyguardToLaunch` flow, wake on press 3, the full matrix. `docs/testing.md` and `scripts/device-smoke.sh`. | Matrix passes, including the manual SOS check with the phone locked and face unlock on |
-| 4 | Config app | **Design first:** study a few well-regarded Android apps (system settings, utilities, and other root or module managers) to work out what makes a good Android app, then present **3 distinct design variants** to the owner. Build only the variant the owner picks. Then: Compose screen in `ui/`, service client and app listing in `data/`, remote prefs through the `:core` config contract, status line, app picker | The owner has picked a design variant. Toggling the feature or changing the target takes effect live with no reboot. `dumpsys` shows no background components. |
+| 2 (built 2026-10-31; owner presses and SOS check pending) | Hook glue: dry run, then camera | `:hook` reshaped into its target packages (§4). Target resolvers with feature detection. The interceptors first run in **dry-run** mode, logging what they would do and always proceeding with stock, then for real with unlocked-phone launches only. `docs/architecture.md` and the first ADRs. Built: all of that, with `dry_run` as a config key switched from adb through the debug `DevConfigActivity`; 103 unit tests across `:core` and `:hook`; reviewed by `code-reviewer`, `kotlin-reviewer` and `security-reviewer`. On the phone (2026-10-31): Phase 2 targets dexdump-verified; install and hot reload work; config changes apply live. **Dry run met its criterion**: about 30 real 1/2/3 sequences were classified exactly as stock counted them. The first live runs found that holding the camera locks a phone that was unlocked (§7, keyguard row). ADR 0007 fixed this by holding only on a locked phone. **Live runs after the fix** (injected presses): from an unlocked phone, a double opens the normal camera at once and stays unlocked, and a triple opens the app unlocked, over a camera flash of about 0.1 s. From a locked phone, a double opens the secure camera 350 ms later, and a triple consumes press 3 and opens the camera (unlock-then-open is Phase 3). Still to do: the owner's own live presses, and a manual SOS check. | A few dozen real 1/2/3 presses match the dry-run logs. On real runs: triple opens the app unlocked, double opens the camera about 350 ms later, and single is unchanged. |
+| 3 (built 2026-11-01) | Lock screen and SOS | Unlock-then-open through `dismissKeyguardLw` and a dismiss callback (§3.3; the Wallet-tile flow), wake on press 3, the full matrix. `docs/testing.md` and `scripts/device-smoke.sh`. Built: unlock-then-open 400 ms after press 3, with the fingerprint overlay and an SOS guard (ADR 0008), the wake on press 3, the smoke script, `docs/testing.md`; reviewed by `security-reviewer`. On the phone: a locked triple shows the fingerprint overlay and opens the app once unlocked; face unlock, the lock screen, an app already open and long press work; the Emergency SOS check passed locked and unlocked. Rows not yet run (animations off, a phone call) are marked in `docs/testing.md`. | Matrix passes, including the manual SOS check with the phone locked and face unlock on |
+| 4 (built and checked on the phone 2026-11-01) | Config app | **Design first:** study a few well-regarded Android apps (system settings, utilities, and other root or module managers) to work out what makes a good Android app, then present **3 distinct design variants** to the owner. Build only the variant the owner picks. Then: Compose screen in `ui/`, service client and app listing in `data/`, remote prefs through the `:core` config contract (`RemoteConfigStore` exists), status line, app picker. Replace libxposed's exported `XposedProvider` with a subclass that only accepts a binder from Vector's uid, because as shipped any app can hand the app process a fake service (security review, 2026-10-31; this can't reach the hook). Built (2026-11-01): the owner picked variant B, "status dashboard" (a coloured status card with the switch, the chosen app, a checks card, a press map, and a bottom-sheet picker). `XposedProvider` turned out to be final, so `data.VectorBinderProvider` replaces it in the manifest, accepts only the system uid (which Vector's daemon runs as) and root, and delegates to an attached instance. The status adds the module's load state from `getRunningTargets()` and a tested-build check. 45 `:app` unit tests; reviewed by `code-reviewer`, `kotlin-reviewer` and `security-reviewer`, with their findings fixed. On the phone (2026-11-01): Vector's binder arrives through the new provider (from uid 1000, the uid `vectord` runs as); switching the feature off and on and changing the target each reached the hook live, with no reboot; a real triple press opened the newly chosen app; `dumpsys` shows no services or receivers. The remaining manual rows are marked in `docs/testing.md` (Config app) | The owner has picked a design variant. Toggling the feature or changing the target takes effect live with no reboot. `dumpsys` shows no background components. |
 | 5 | CI and release | GitHub Actions on push and PR runs `./gradlew check`, the hygiene check and `assembleRelease`, and uploads a signed APK artifact. A tag creates a release with notes from `CHANGELOG.md`. Dependabot for Gradle and Actions; a PR template with the pre-flight checklist. The keystore lives in Actions secrets and a password manager. | A green run on `main` produces an installable signed APK |
-| 6 | Soak | Daily use for 1–2 weeks, plus the post-OTA checklist (§6) | No missed or false triggers, and no SOS regression |
+| 6 | Soak | Daily use for 1–2 weeks, plus the post-OTA checklist (`docs/testing.md`) | No missed or false triggers, and no SOS regression |
 
 ## 6. Testing
 
-- **Unit (`:core`):** all reducer logic. Every real decision is made here, so fast JVM tests cover most of the risk.
-- **Resolver tests:** fixture classes that copy GestureLauncherService's signatures prove that feature detection either finds the targets or refuses cleanly.
-- **Device smoke (`scripts/device-smoke.sh`):** uses `input keyevent` with spacing for 1, 2 and 3 presses and a 350 ms "slow third", then checks the module's logcat lines. **Never script 4 or 5 presses.**
-- **Device matrix (manual):**
-
-| Starting state ↓ / sequence → | 1 | 2 | 3 | slow 3rd (>300 ms) | long press | 5 (SOS) |
-|---|---|---|---|---|---|---|
-| Screen off, locked | | | | | | |
-| Screen off, locked, face unlock succeeds before press 3 | | | | | | |
-| Screen on, locked | | | | | | |
-| Screen on, unlocked | | | | | | |
-| Screen on, unlocked, animations off (screen fully off before press 2) | | | | | | |
-| Target app already open | | | | | | |
-| Camera already open | | | | | | |
-| During a phone call | | | | | | |
-
-  SOS test: Settings › Safety & emergency › Emergency SOS, make sure the countdown is on, and cancel during the countdown. Do it by hand, with the phone locked, once per release and after every OTA. Watch whether the chosen app or the unlock prompt ever covers the countdown (that decides the SOS guard).
-- **After every monthly OTA:** re-root, check the config app's status line, run the smoke script, do the manual SOS check, and add the new build fingerprint to `docs/hook-targets.md`.
+Moved to [testing.md](testing.md) in Phase 3: the automated tests, the device smoke test, the device matrix, the Emergency SOS check and the post-OTA checklist.
 
 ## 7. Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | QPR1 or a later OTA changes GestureLauncherService | Medium | Module goes inactive; camera keeps working | Phase 0 decompile; feature detection; status line |
-| `handleCameraGesture` is inlined or removed by R8/ART | Medium | Hook never fires | `deoptimize`; check call sites in Phase 0; feature detection includes a call-site check |
-| SystemUI or keyguard state gets confused when press 2 reports "launched" but the camera never opens | Medium | Lock-screen glitch | Phase 3 matrix across lock states. Fallback: on press 2 report not-launched, return `true`, and wake the device ourselves. |
+| `handleCameraGesture` is inlined or removed by R8/ART | Medium | Hook never fires | `deoptimize` at install (a failure is logged as a warning); the call site is checked with `dexdump` for every build (`docs/hook-targets.md`), since checking it at runtime would mean parsing dex |
+| SystemUI or keyguard state gets confused when press 2 reports "launched" but the camera never opens | **Happened** (2026-10-31, CP3A) | A phone that was unlocked locks: the held double opens the secure camera instead of the normal one, and press 3 finds the keyguard showing | Cause: when it wakes from the press-1 screen-off, SystemUI's keyguard transition (`FromDozingTransitionInteractor` → `TransitionInteractor.maybeHandleInsecurePowerGesture`) only goes to GONE if the keyguard is dismissible or it has already seen an insecure camera launch (`occludingActivityWillDismissKeyguard`). Stock's camera request reaches SystemUI before the wake; a held one arrives 350 ms later, after it has chosen OCCLUDED/LOCKSCREEN. PWM's `CAMERA_GESTURE_PREVENT_LOCK` path runs either way. The old fallback (report not-launched) would lock too. Locked-phone sequences aren't affected. **Resolved** by ADR 0007: the camera is held only when the phone was locked at press 1. |
 | A phantom tap from re-running the original | Low (designed out) | False SOS call | `proceed()` once, outside the try; Phase 0 check of `ExceptionMode`; reducer tests can't catch this, so the matrix covers it |
 | libxposed upstream availability (Vector had to mirror it) | Medium | Can't fetch the dependency | It's `compileOnly`; pin 102.0.0 from Maven Central, and mirror the AAR privately if it disappears |
 | A Vector update breaks the API (2.1 → 2.2 broke manager/daemon compatibility) | Medium | Rebuild needed | Pin versions; read release notes before updating Vector |

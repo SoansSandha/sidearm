@@ -6,6 +6,8 @@ package io.github.soanssandha.sidearm.core.config
  */
 data class TargetComponent(val packageName: String, val className: String) {
     init {
+        // Checked first: matching a very long string can overflow the regex engine's stack.
+        require(packageName.length + 1 + className.length <= MAX_FLAT_LENGTH) { "Component name too long" }
         require(PACKAGE_NAME.matches(packageName)) { "Invalid package name: '$packageName'" }
         require(CLASS_NAME.matches(className)) { "Invalid class name: '$className'" }
     }
@@ -13,6 +15,9 @@ data class TargetComponent(val packageName: String, val className: String) {
     fun flatten(): String = "$packageName/$className"
 
     companion object {
+        /** The longest [flatten] text accepted, far above any real component. */
+        const val MAX_FLAT_LENGTH = 1_024
+
         // Android requires an ASCII package name with at least two segments.
         private val PACKAGE_NAME = Regex("""[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+""")
 
@@ -27,7 +32,9 @@ data class TargetComponent(val packageName: String, val className: String) {
             val packageName = flat.substringBefore('/', missingDelimiterValue = "")
             val rawClassName = flat.substringAfter('/', missingDelimiterValue = "")
             val className = if (rawClassName.startsWith('.')) packageName + rawClassName else rawClassName
-            val valid = PACKAGE_NAME.matches(packageName) && CLASS_NAME.matches(className)
+            val valid = packageName.length + 1 + className.length <= MAX_FLAT_LENGTH &&
+                PACKAGE_NAME.matches(packageName) &&
+                CLASS_NAME.matches(className)
             return if (valid) TargetComponent(packageName, className) else null
         }
     }

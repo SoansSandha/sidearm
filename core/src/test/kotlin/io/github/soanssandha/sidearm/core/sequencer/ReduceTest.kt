@@ -15,7 +15,9 @@ class ReduceTest {
     private val timing = Timing(windowMs = 300, graceMs = 50)
 
     private val holding = State.HoldingCamera(generation = 1, pressTime = 1_000, deadline = 1_350, camera = camera)
-    private val idleAfterFlush = State.Idle(generation = 1, lastFlushedPress = 1_000)
+
+    /** After press 2 at 1000, whose camera has already run: the timer released it, or the phone was unlocked. */
+    private val idleAfterCamera = State.Idle(generation = 1, lastCameraPress = 1_000)
 
     private fun reduce(state: State, event: Event, config: Config = armed) = reduce(state, event, config, timing)
 
@@ -23,11 +25,14 @@ class ReduceTest {
         assertEquals(Transition(state, emptyList()), reduce(state, event, config))
     }
 
+    private fun cameraRequested(pressTime: Long = 1_000, startedLocked: Boolean = true) =
+        Event.CameraRequested(pressTime = pressTime, camera = camera, startedLocked = startedLocked)
+
     // Idle
 
     @Test
-    fun `camera request while armed holds the camera until one window plus grace after the press`() {
-        val transition = reduce(State.INITIAL, Event.CameraRequested(pressTime = 1_000, camera = camera))
+    fun `camera request while armed and locked holds the camera until one window plus grace after the press`() {
+        val transition = reduce(State.INITIAL, cameraRequested(pressTime = 1_000))
 
         assertEquals(
             Transition(
@@ -40,22 +45,33 @@ class ReduceTest {
 
     @Test
     fun `each hold takes the next generation`() {
-        val transition = reduce(State.Idle(generation = 7), Event.CameraRequested(pressTime = 1_000, camera = camera))
+        val transition = reduce(State.Idle(generation = 7), cameraRequested())
 
         assertEquals(8L, transition.state.generation)
     }
 
     @Test
-    fun `camera request while not armed runs the camera now`() {
+    fun `camera request while armed and unlocked runs the camera now and remembers the press`() {
+        // Holding would lock the phone (ADR 0007), so the camera opens as in stock and press 3 opens the target over it.
+        assertEquals(
+            Transition(State.Idle(generation = 7, lastCameraPress = 1_000), listOf(Effect.RunCameraNow)),
+            reduce(State.Idle(generation = 7), cameraRequested(pressTime = 1_000, startedLocked = false)),
+        )
+    }
+
+    @Test
+    fun `camera request while not armed runs the camera now and remembers nothing`() {
         val unarmed =
             listOf(Config.DEFAULT, Config(enabled = true, target = null), Config(enabled = false, target = target))
 
         unarmed.forEach { config ->
-            assertEquals(
-                Transition(State.INITIAL, listOf(Effect.RunCameraNow)),
-                reduce(State.INITIAL, Event.CameraRequested(pressTime = 1_000, camera = camera), config),
-                "config $config",
-            )
+            listOf(true, false).forEach { startedLocked ->
+                assertEquals(
+                    Transition(State.INITIAL, listOf(Effect.RunCameraNow)),
+                    reduce(State.INITIAL, cameraRequested(startedLocked = startedLocked), config),
+                    "config $config, keyguard showing $startedLocked",
+                )
+            }
         }
     }
 
@@ -67,47 +83,51 @@ class ReduceTest {
     }
 
     @Test
-    fun `third press that lost the race to the timer is consumed while the camera opens`() {
-        // Stock counted it within the window of the flushed press 2, but the timer ran the camera first.
+    fun `third press after the camera already ran opens the target over it`() {
+        // Stock counted it within the window of press 2, whose camera already ran: the phone was unlocked, or the
+        // timer won the race. There's no camera to fall back to, because it's already open.
         assertEquals(
-            Transition(idleAfterFlush, listOf(Effect.ConsumePress)),
-            reduce(idleAfterFlush, Event.PowerDown(eventTime = 1_299, taps = 3, interactive = true)),
+            Transition(
+                State.Idle(generation = 1),
+                listOf(Effect.ConsumePress, Effect.LaunchTarget(target = target, fallback = null)),
+            ),
+            reduce(idleAfterCamera, Event.PowerDown(eventTime = 1_299, taps = 3, interactive = true)),
         )
     }
 
     @Test
-    fun `third press that lost the race is consumed whatever the config, because the camera is opening anyway`() {
+    fun `third press after the camera already ran also wakes the device if it isn't interactive`() {
+        assertEquals(
+            listOf(Effect.ConsumePress, Effect.WakeDevice, Effect.LaunchTarget(target = target, fallback = null)),
+            reduce(idleAfterCamera, Event.PowerDown(eventTime = 1_299, taps = 3, interactive = false)).effects,
+        )
+    }
+
+    @Test
+    fun `third press after the camera ran is only consumed once the feature is off, as the camera is opening`() {
         // e.g. the feature was turned off mid-hold, which also flushes the camera.
         assertEquals(
-            Transition(idleAfterFlush, listOf(Effect.ConsumePress)),
-            reduce(idleAfterFlush, Event.PowerDown(eventTime = 1_200, taps = 3, interactive = true), Config.DEFAULT),
-        )
-    }
-
-    @Test
-    fun `third press that lost the race does not wake the device, because the camera launch does`() {
-        assertEquals(
-            listOf(Effect.ConsumePress),
-            reduce(idleAfterFlush, Event.PowerDown(eventTime = 1_299, taps = 3, interactive = false)).effects,
+            Transition(idleAfterCamera, listOf(Effect.ConsumePress)),
+            reduce(idleAfterCamera, Event.PowerDown(eventTime = 1_200, taps = 3, interactive = true), Config.DEFAULT),
         )
     }
 
     @Test
     fun `third press of a later sequence is left to stock`() {
-        assertUnchanged(idleAfterFlush, Event.PowerDown(eventTime = 1_300, taps = 3, interactive = true))
+        assertUnchanged(idleAfterCamera, Event.PowerDown(eventTime = 1_300, taps = 3, interactive = true))
     }
 
     @Test
-    fun `other presses after a flush are left to stock`() {
-        assertUnchanged(idleAfterFlush, Event.PowerDown(eventTime = 1_100, taps = 1, interactive = true))
-        assertUnchanged(idleAfterFlush, Event.PowerDown(eventTime = 1_200, taps = 4, interactive = true))
+    fun `other presses after the camera ran are left to stock`() {
+        assertUnchanged(idleAfterCamera, Event.PowerDown(eventTime = 1_100, taps = 1, interactive = true))
+        assertUnchanged(idleAfterCamera, Event.PowerDown(eventTime = 1_200, taps = 4, interactive = true))
     }
 
     @Test
     fun `timers, config changes and release do nothing while idle`() {
         listOf(Event.TimerFired(generation = 1), Event.ConfigChanged, Event.Released).forEach { event ->
-            assertUnchanged(idleAfterFlush, event)
-            assertUnchanged(idleAfterFlush, event, Config.DEFAULT)
+            assertUnchanged(idleAfterCamera, event)
+            assertUnchanged(idleAfterCamera, event, Config.DEFAULT)
         }
     }
 
@@ -159,7 +179,7 @@ class ReduceTest {
     @Test
     fun `third press after the feature was disarmed runs the held camera and is left to stock`() {
         assertEquals(
-            Transition(idleAfterFlush, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
+            Transition(idleAfterCamera, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
             reduce(holding, Event.PowerDown(eventTime = 1_200, taps = 3, interactive = true), Config.DEFAULT),
         )
     }
@@ -174,7 +194,7 @@ class ReduceTest {
 
         others.forEach { event ->
             assertEquals(
-                Transition(idleAfterFlush, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
+                Transition(idleAfterCamera, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
                 reduce(holding, event),
                 "event $event",
             )
@@ -184,7 +204,7 @@ class ReduceTest {
     @Test
     fun `timer for the current hold runs the held camera`() {
         assertEquals(
-            Transition(idleAfterFlush, listOf(Effect.RunHeldCamera(camera))),
+            Transition(idleAfterCamera, listOf(Effect.RunHeldCamera(camera))),
             reduce(holding, Event.TimerFired(generation = 1)),
         )
     }
@@ -197,7 +217,7 @@ class ReduceTest {
     @Test
     fun `config change that disarms the feature runs the held camera now`() {
         assertEquals(
-            Transition(idleAfterFlush, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
+            Transition(idleAfterCamera, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
             reduce(holding, Event.ConfigChanged, Config.DEFAULT),
         )
     }
@@ -210,7 +230,7 @@ class ReduceTest {
     @Test
     fun `release runs the held camera now`() {
         assertEquals(
-            Transition(idleAfterFlush, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
+            Transition(idleAfterCamera, listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera))),
             reduce(holding, Event.Released),
         )
     }
@@ -219,10 +239,10 @@ class ReduceTest {
     fun `a second camera request runs both the held camera and the new one`() {
         assertEquals(
             Transition(
-                idleAfterFlush,
+                idleAfterCamera,
                 listOf(Effect.CancelTimer(generation = 1), Effect.RunHeldCamera(camera), Effect.RunCameraNow),
             ),
-            reduce(holding, Event.CameraRequested(pressTime = 1_400, camera = camera)),
+            reduce(holding, cameraRequested(pressTime = 1_400)),
         )
     }
 }

@@ -9,11 +9,13 @@ object ConfigCodec {
     fun decode(stored: Map<String, *>): Config = Config(
         enabled = stored[ConfigKeys.ENABLED] as? Boolean ?: false,
         target = (stored[ConfigKeys.TARGET_COMPONENT] as? String)?.let(TargetComponent::parse),
+        dryRun = stored[ConfigKeys.DRY_RUN] as? Boolean ?: false,
     )
 
     /** The values to store for [config]. A null value means the key should be removed. */
     fun encode(config: Config): Map<String, Any?> = mapOf(
         ConfigKeys.ENABLED to config.enabled,
         ConfigKeys.TARGET_COMPONENT to config.target?.flatten(),
+        ConfigKeys.DRY_RUN to config.dryRun,
     )
 }
