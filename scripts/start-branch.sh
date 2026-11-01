@@ -11,6 +11,14 @@ cd "$(git rev-parse --show-toplevel)"
 
 stop() { echo "No branch created: $1" >&2; exit 1; }
 
+# A squash merge lands a branch's work on develop as a new commit, so the branch's own commits never
+# reach origin. If merging the branch into develop again would change nothing, its work is already there.
+on_develop() {
+  local merged
+  merged="$(git merge-tree --write-tree origin/develop "$1" 2>/dev/null)" || return 1
+  [ "$merged" = "$(git rev-parse 'origin/develop^{tree}')" ]
+}
+
 case "$name" in
   main | develop | hotfix/* | dependabot/*)
     stop "'$name' isn't a topic branch off develop. Hotfixes branch from main; ask the owner." ;;
@@ -33,5 +41,9 @@ git switch --quiet -c "$name"
 
 echo "Created $name from develop at $(git log -1 --format='%h %s')."
 if [ -n "$previous" ] && [ -n "$(git rev-list "$previous" --not --remotes)" ]; then
-  echo "Note: $previous has commits that aren't pushed yet. They stay on that branch."
+  if on_develop "$previous"; then
+    echo "Note: $previous's changes are already on develop, so it can be deleted: git branch -D $previous"
+  else
+    echo "Note: $previous has commits that aren't on GitHub. They stay on that branch."
+  fi
 fi
