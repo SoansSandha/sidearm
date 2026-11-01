@@ -24,15 +24,14 @@ internal class GestureLauncherTargets private constructor(
 ) {
 
     /** Reads the service's state right after stock `interceptPowerKeyDown` has run. */
-    fun snapshot(service: Any, event: KeyEvent, outLaunched: Any): PowerKeySnapshot =
-        PowerKeySnapshot(
-            counted = lastPowerDown.getLong(service) == event.eventTime,
-            consecutiveTaps = consecutiveTaps.getInt(service),
-            outLaunched = mutableBooleanValue.getBoolean(outLaunched),
-            cameraEnabled = cameraEnabled.getBoolean(service),
-            walletEnabled = walletEnabled.getBoolean(service),
-            emergencyEnabled = emergencyEnabled.getBoolean(service),
-        )
+    fun snapshot(service: Any, event: KeyEvent, outLaunched: Any): PowerKeySnapshot = PowerKeySnapshot(
+        counted = lastPowerDown.getLong(service) == event.eventTime,
+        consecutiveTaps = consecutiveTaps.getInt(service),
+        outLaunched = mutableBooleanValue.getBoolean(outLaunched),
+        cameraEnabled = cameraEnabled.getBoolean(service),
+        walletEnabled = walletEnabled.getBoolean(service),
+        emergencyEnabled = emergencyEnabled.getBoolean(service),
+    )
 
     companion object {
         private const val SERVICE_CLASS = "com.android.server.GestureLauncherService"
@@ -76,11 +75,10 @@ internal class GestureLauncherTargets private constructor(
                 isAccessible = true
             }
 
-        private fun Class<*>.field(name: String, type: Class<*>): Field =
-            getDeclaredField(name).apply {
-                check(this.type == type) { "$name is ${this.type}, expected $type" }
-                isAccessible = true
-            }
+        private fun Class<*>.field(name: String, type: Class<*>): Field = getDeclaredField(name).apply {
+            check(this.type == type) { "$name is ${this.type}, expected $type" }
+            isAccessible = true
+        }
     }
 }
 

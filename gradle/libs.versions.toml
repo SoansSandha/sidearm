@@ -1,13 +1,31 @@
 [versions]
+# The app's release version (semver). Phase 5 derives the release versionCode from it.
+sidearm = "0.1.0"
+compileSdk = "37"
+minSdk = "37"
+targetSdk = "37"
+# Bytecode level for every module; the build itself runs on Android Studio's bundled JBR.
+jvmTarget = "17"
 agp = "9.5.0"
 kotlin = "2.4.21"
+kover = "0.9.11"
+ktlint = "1.8.0"
 libxposed = "102.0.0"
+spotless = "8.10.4"
 
 [libraries]
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed" }
+
+# Compile-only dependencies of the build-logic convention plugins.
+android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+kotlin-gradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kover-gradlePlugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 # Puts this KGP on the build classpath, so AGP's built-in Kotlin compiles with it too.
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

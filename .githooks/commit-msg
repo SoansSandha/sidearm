@@ -1,3 +1,8 @@
 #!/usr/bin/env bash
-# Checks the commit message for secrets and personal data before the commit is created.
-exec bash "$(git rev-parse --show-toplevel)/scripts/check-repo-hygiene.sh" --message "$1"
+# Checks the commit message before the commit is created: the Conventional Commits format
+# (CONTRIBUTING.md), then secrets and personal data (.claude/rules/git-and-privacy.md).
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+bash "$root/scripts/check-conventions.sh" --message "$1"
+exec bash "$root/scripts/check-repo-hygiene.sh" --message "$1"

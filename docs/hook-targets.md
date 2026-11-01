@@ -24,6 +24,14 @@ Checked 2026-10-29. The bytecode logic of `interceptPowerKeyDown` matches the `a
 - camera at 2 taps with `handleCameraGesture(false, 1)`
 - wallet via `handleWalletGesture()`
 
+### How stock counts presses
+
+From `interceptPowerKeyDown` in the `android17-release` source (L662–737), whose logic this build's bytecode matched. `:core`'s test fixture `StockTapCounter` models the fast-tap part.
+- Long presses return `false` before anything is counted, so `mLastPowerDown` doesn't change. That's why the hook checks `mLastPowerDown == eventTime`.
+- `powerTapInterval = eventTime - mLastPowerDown`. At 500 ms or more the count restarts at 1; at 300 ms or more (`>=`) it also restarts at 1; below 300 ms it goes up by one. A press exactly 300 ms after the previous one is therefore a new first press.
+- The camera launches only when the count is exactly 2 and the interval is under 300 ms.
+- With Emergency SOS on, 5 taps that come faster than `EMERGENCY_GESTURE_TAP_DETECTION_MIN_TIME_MS` restart the count at 1 instead of firing SOS.
+
 ### `com.android.server.GestureLauncherService` (services.jar, classes.dex)
 
 | Kind | Name | Descriptor / value | Used for |

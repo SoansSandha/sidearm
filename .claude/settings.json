@@ -155,6 +155,7 @@
       "PowerShell(git push --no-verify *)",
       "PowerShell(git commit --no-verify *)",
       "PowerShell(git commit -n *)"
-    ]
+    ],
+    "allow": ["Bash(bash scripts/start-branch.sh *)"]
   }
 }
