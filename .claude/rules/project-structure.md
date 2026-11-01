@@ -47,6 +47,7 @@ The Phase 0 probe (`hook/SidearmModule.kt`, `hook/GestureLauncherTargets.kt`) is
 | What | Where |
 |---|---|
 | Roadmap and status | `docs/plan.md` |
+| Branches, commit messages, pull requests, releases, and what to do in each situation | `CONTRIBUTING.md` |
 | How the system works now | `docs/architecture.md` (from Phase 2) |
 | Why a decision was made | `docs/decisions/NNNN-short-title.md`: an ADR with context, decision and consequences. To change one, write a new ADR that supersedes it; never rewrite an accepted one. |
 | Verified framework signatures per build | `docs/hook-targets.md` |
@@ -63,10 +64,16 @@ The Phase 0 probe (`hook/SidearmModule.kt`, `hook/GestureLauncherTargets.kt`) is
 
 Don't add a top-level directory without updating plan §4 and this file.
 
-## Naming and versions
+## Naming, branches and versions
 
 - Gradle modules are short lowercase words. Convention plugin ids are `sidearm.android.application`, `sidearm.android.library` and `sidearm.jvm.library`.
-- Branches come off `main` as `feat/…`, `fix/…`, `docs/…` or `chore/…`. Tags are `vX.Y.Z`. Commits use the conventional-commit format.
+- Branching follows `CONTRIBUTING.md` (why: `docs/decisions/0001-branching-model.md`). In short:
+  - `main` holds releases and `develop` is the integration branch. Neither takes direct commits or pushes; they change only through pull requests.
+  - Topic branches come off `develop` as `<type>/<description>`, using a commit type (`feat/camera-hold`, `fix/12-stale-timer`), and are squash-merged back. `hotfix/…` comes off `main`. `spike/…` is never merged.
+  - Commits and PR titles follow Conventional Commits: `<type>(<scope>): <imperative subject>`, at most 72 characters.
+  - New work starts with `bash scripts/start-branch.sh <type>/<description>`, which updates `develop` from origin and branches off it. Claude runs it without asking when a new task begins and the worktree is clean; renaming a branch needs the owner's OK (rules §1).
+  - The commit-msg and pre-push hooks enforce branch names and the message format.
+- Releases are annotated `vX.Y.Z` tags on `main`. Until 1.0.0, the minor version is the phase (`v0.1.0` is Phase 1).
 - The release `versionName` (semver) is defined in one place, and the release `versionCode` is derived from it. Dev installs override `versionCode` through `scripts/dev-install.sh`.
 
 ## One-command verification
