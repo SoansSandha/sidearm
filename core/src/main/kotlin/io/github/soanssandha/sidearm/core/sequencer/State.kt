@@ -6,10 +6,11 @@ sealed interface State {
     val generation: Long
 
     /**
-     * No camera launch is held. [lastFlushedPress] is the press that started the latest hold that ended by opening
-     * the camera, so a third press of that sequence is still recognised after it lost the race to the timer.
+     * No camera launch is held. [lastCameraPress] is the latest press 2 whose camera has already run, either let
+     * straight through on an unlocked phone or released from a hold, so a third press of that sequence still opens
+     * the target, over the camera.
      */
-    data class Idle(override val generation: Long = 0, val lastFlushedPress: Long? = null) : State
+    data class Idle(override val generation: Long = 0, val lastCameraPress: Long? = null) : State
 
     /** The camera launch requested by the press at [pressTime] is held until [deadline]. */
     data class HoldingCamera(

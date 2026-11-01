@@ -12,6 +12,7 @@ class ConfigCodecTest {
         assertEquals("settings", ConfigKeys.GROUP)
         assertEquals("enabled", ConfigKeys.ENABLED)
         assertEquals("target_component", ConfigKeys.TARGET_COMPONENT)
+        assertEquals("dry_run", ConfigKeys.DRY_RUN)
     }
 
     @Test
@@ -19,9 +20,10 @@ class ConfigCodecTest {
         val stored = mapOf(
             ConfigKeys.ENABLED to true,
             ConfigKeys.TARGET_COMPONENT to "com.example.app/.Main",
+            ConfigKeys.DRY_RUN to true,
         )
 
-        assertEquals(Config(enabled = true, target = target), ConfigCodec.decode(stored))
+        assertEquals(Config(enabled = true, target = target, dryRun = true), ConfigCodec.decode(stored))
     }
 
     @Test
@@ -34,6 +36,7 @@ class ConfigCodecTest {
         val stored = mapOf(
             ConfigKeys.ENABLED to "true",
             ConfigKeys.TARGET_COMPONENT to 42,
+            ConfigKeys.DRY_RUN to 1,
         )
 
         assertEquals(Config.DEFAULT, ConfigCodec.decode(stored))
@@ -55,18 +58,28 @@ class ConfigCodecTest {
     @Test
     fun `encodes every key, with null meaning remove`() {
         assertEquals(
-            mapOf(ConfigKeys.ENABLED to true, ConfigKeys.TARGET_COMPONENT to "com.example.app/com.example.app.Main"),
-            ConfigCodec.encode(Config(enabled = true, target = target)),
+            mapOf(
+                ConfigKeys.ENABLED to true,
+                ConfigKeys.TARGET_COMPONENT to "com.example.app/com.example.app.Main",
+                ConfigKeys.DRY_RUN to true,
+            ),
+            ConfigCodec.encode(Config(enabled = true, target = target, dryRun = true)),
         )
         assertEquals(
-            mapOf(ConfigKeys.ENABLED to false, ConfigKeys.TARGET_COMPONENT to null),
+            mapOf(ConfigKeys.ENABLED to false, ConfigKeys.TARGET_COMPONENT to null, ConfigKeys.DRY_RUN to false),
             ConfigCodec.encode(Config.DEFAULT),
         )
     }
 
     @Test
     fun `encode then decode gives back the same config`() {
-        listOf(Config.DEFAULT, Config(true, target), Config(false, target), Config(true, null)).forEach {
+        listOf(
+            Config.DEFAULT,
+            Config(true, target),
+            Config(false, target),
+            Config(true, null),
+            Config(true, target, dryRun = true),
+        ).forEach {
             assertEquals(it, ConfigCodec.decode(ConfigCodec.encode(it)))
         }
     }

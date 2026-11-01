@@ -6,9 +6,10 @@ import io.github.soanssandha.sidearm.core.config.TargetComponent
 private const val TRIPLE_PRESS_TAPS = 3
 
 /**
- * The press sequencer. On a power double-press it holds stock's camera launch for one window; a third press in
- * that window opens [Config.armedTarget] instead, and otherwise the held camera runs. The rules are the state table
- * in docs/plan.md §3.2.
+ * The press sequencer. On a power double-press while the phone is locked, it holds stock's camera launch for one
+ * window; a third press in that window opens [Config.armedTarget] instead, and otherwise the held camera runs. While
+ * the phone is unlocked the camera opens at once, as in stock, and a third press opens the target over it (holding
+ * would lock the phone; ADR 0007). The rules are the state table in docs/plan.md §3.2.
  *
  * Pure and cheap, so the hook can call it under one lock. It fails open: anything unexpected while the camera is
  * held runs the held camera.
@@ -19,11 +20,21 @@ fun reduce(state: State, event: Event, config: Config, timing: Timing): Transiti
 }
 
 private fun State.Idle.on(event: Event, config: Config, timing: Timing): Transition = when (event) {
-    is Event.CameraRequested ->
-        if (config.armedTarget != null) hold(event, timing) else Transition(this, listOf(Effect.RunCameraNow))
+    is Event.CameraRequested -> when {
+        config.armedTarget == null -> Transition(this, listOf(Effect.RunCameraNow))
+        event.startedLocked -> hold(event, timing)
+        else -> Transition(State.Idle(generation, lastCameraPress = event.pressTime), listOf(Effect.RunCameraNow))
+    }
 
-    is Event.PowerDown ->
-        if (isLateThirdPress(event, timing)) Transition(this, listOf(Effect.ConsumePress)) else Transition(this)
+    is Event.PowerDown -> if (isThirdPressAfterCamera(
+            event,
+            timing,
+        )
+    ) {
+        openOverCamera(event, config)
+    } else {
+        Transition(this)
+    }
 
     is Event.TimerFired, Event.ConfigChanged, Event.Released -> Transition(this)
 }
@@ -62,13 +73,26 @@ private fun State.Idle.hold(event: Event.CameraRequested, timing: Timing): Trans
     )
 }
 
+/** Stock counted a third press within one window of a press 2 whose camera has already run. */
+private fun State.Idle.isThirdPressAfterCamera(event: Event.PowerDown, timing: Timing): Boolean {
+    val cameraPress = lastCameraPress ?: return false
+    return event.taps == TRIPLE_PRESS_TAPS && event.eventTime - cameraPress < timing.windowMs
+}
+
 /**
- * Stock counted a third press within one window of the press whose held camera already opened, so the timer won
- * the race. Consuming the press stops PhoneWindowManager toggling the screen while the camera opens.
+ * Opens the target over the camera that's already opening. The press is consumed either way, so PhoneWindowManager
+ * doesn't toggle the screen while the camera opens; once the feature is off, that's all it does.
  */
-private fun State.Idle.isLateThirdPress(event: Event.PowerDown, timing: Timing): Boolean {
-    val flushedPress = lastFlushedPress ?: return false
-    return event.taps == TRIPLE_PRESS_TAPS && event.eventTime - flushedPress < timing.windowMs
+private fun State.Idle.openOverCamera(event: Event.PowerDown, config: Config): Transition {
+    val target = config.armedTarget ?: return Transition(this, listOf(Effect.ConsumePress))
+    return Transition(
+        State.Idle(generation),
+        listOfNotNull(
+            Effect.ConsumePress,
+            Effect.WakeDevice.takeUnless { event.interactive },
+            Effect.LaunchTarget(target, fallback = null),
+        ),
+    )
 }
 
 private fun State.HoldingCamera.launch(target: TargetComponent, event: Event.PowerDown) = Transition(
@@ -83,6 +107,6 @@ private fun State.HoldingCamera.launch(target: TargetComponent, event: Event.Pow
 
 /** Ends the hold by running the held camera. */
 private fun State.HoldingCamera.flush(cancelTimer: Boolean) = Transition(
-    State.Idle(generation, lastFlushedPress = pressTime),
+    State.Idle(generation, lastCameraPress = pressTime),
     listOfNotNull(Effect.CancelTimer(generation).takeIf { cancelTimer }, Effect.RunHeldCamera(camera)),
 )

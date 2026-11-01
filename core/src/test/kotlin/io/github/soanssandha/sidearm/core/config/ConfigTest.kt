@@ -17,7 +17,13 @@ class ConfigTest {
     }
 
     @Test
-    fun `default is disabled with no target`() {
-        assertEquals(Config(enabled = false, target = null), Config.DEFAULT)
+    fun `dry run doesn't change whether the feature is armed`() {
+        assertEquals(target, Config(enabled = true, target = target, dryRun = true).armedTarget)
+        assertNull(Config(enabled = false, target = target, dryRun = true).armedTarget)
+    }
+
+    @Test
+    fun `default is disabled with no target, and not a dry run`() {
+        assertEquals(Config(enabled = false, target = null, dryRun = false), Config.DEFAULT)
     }
 }

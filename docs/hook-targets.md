@@ -56,9 +56,45 @@ From `interceptPowerKeyDown` in the `android17-release` source (L662–737), who
 | `…keyguard.KeyguardServiceDelegate` | `isShowing` / `dismissKeyguardToLaunch` | `()Z` / `(Landroid/content/Intent;)V` | Unlock-then-launch |
 | `com.android.server.wm.WindowManagerService` | constructor | `LocalServices.addService(WindowManagerPolicy.class, mPolicy)` | Reaching the PWM instance |
 
-### What the Phase 0 probe logs
+### Added in Phase 2
 
-The probe logs every press along with the device's double-press and SOS state (`cameraEnabled`, `walletEnabled`, `emergencyEnabled`). Read a device's settings from `adb logcat -s Sidearm` rather than recording them here.
+Phase 2's launch path also needs these. Checked against this build's jars on 2026-10-31. They match `android17-release` (PWM L446, L4090, `LocalServices` L46, `UserHandle` L81), except that the platform's R8 made `mContext` and `startActivityAsUser` public. The resolver looks members up with `getDeclaredMethod`/`getDeclaredField` and makes them accessible, so their visibility doesn't matter. `PhoneWindowManager` and `KeyguardServiceDelegate` are in `services.jar` (`classes2.dex`), `WindowManagerPolicy` too (`classes3.dex`); `LocalServices` and `UserHandle` are in `framework.jar`.
+
+| Class | Member | Descriptor / value | Used for |
+|---|---|---|---|
+| `com.android.server.LocalServices` | `getService` | `(Ljava/lang/Class;)Ljava/lang/Object;`, public static | Looking up the PWM instance at launch time |
+| `com.android.server.policy.WindowManagerPolicy` | (interface) | implemented by `PhoneWindowManager` | The `LocalServices` key |
+| `com.android.server.policy.PhoneWindowManager` | `mContext` | `Landroid/content/Context;` (public on this build) | Checking the target is a launcher activity |
+| `com.android.server.policy.PhoneWindowManager` | `startActivityAsUser` | `(Landroid/content/Intent;Landroid/os/UserHandle;)V` (public final on this build; private in source) | Opening the app (skips while setup is incomplete) |
+| `android.os.UserHandle` | `CURRENT_OR_SELF` | `Landroid/os/UserHandle;`, public static final | The user PWM's own launches use |
+
+### What the hook logs
+
+While the feature is armed, it logs every press stock counted and every sequencer decision; a dry run marks its decisions and only checks the target. While it's off, it logs nothing per press. Read a device's double-press and SOS settings from Settings, not from here.
+
+Expected lines for an injected triple with the feature armed (shortened). From an unlocked phone, the camera isn't held (ADR 0007):
+
+```
+PowerDown(eventTime=1000, taps=1, interactive=true) -> stock
+CameraRequested(pressTime=1150, …, startedLocked=false) -> RunCameraNow
+PowerDown(eventTime=1150, taps=2, interactive=false) -> stock
+PowerDown(eventTime=1300, taps=3, interactive=true) -> ConsumePress, LaunchTarget(…, fallback=null)
+Asked PhoneWindowManager to open com.example.app/com.example.app.MainActivity
+```
+
+From a locked phone, the camera is held; until Phase 3, press 3 then opens the camera:
+
+```
+PowerDown(eventTime=1000, taps=1, interactive=true) -> stock
+CameraRequested(pressTime=1150, …, startedLocked=true) -> ScheduleTimer(deadline=1500, generation=1), HoldCamera
+PowerDown(eventTime=1150, taps=2, interactive=false) -> stock
+PowerDown(eventTime=1300, taps=3, interactive=true) -> CancelTimer(generation=1), ConsumePress, LaunchTarget(…)
+Not opening com.example.app/…, because the keyguard is showing (…); opening the camera instead
+```
+
+### What the Phase 0 probe logged
+
+Phase 2 replaced the probe. It logged every press along with the device's double-press and SOS state (`cameraEnabled`, `walletEnabled`, `emergencyEnabled`).
 
 Probe log for an injected triple (`input keyevent KEYCODE_POWER KEYCODE_POWER KEYCODE_POWER`) on a device with camera double-press and Emergency SOS enabled:
 

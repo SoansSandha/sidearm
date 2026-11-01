@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Debug builds only: sets the hook's config from adb until the config app exists (Phase 4).
+             The adb shell holds DUMP and third-party apps can't, so nothing else on the phone can start it.
+             It's invisible and finishes when done, so each `am start` gets a new instance with its extras. -->
+        <activity
+            android:name=".DevConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    </application>
+
+</manifest>

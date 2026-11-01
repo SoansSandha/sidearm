@@ -7,6 +7,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":core"))
     // Provided at runtime by Vector inside system_server; never bundled.
     compileOnly(libs.libxposed.api)
+    testImplementation(libs.libxposed.api)
 }
