@@ -35,6 +35,8 @@ Fill it in on each release and after each OTA. ✅ passed, ⏳ not yet tested, n
 
 Also checked on 2026-11-01: a long press still opens the power menu (real), and `scripts/device-smoke.sh` passes. The Phase 2 dry run with real presses: about 30 sequences of 1, 2 and 3 presses, every one classified exactly as stock counted it.
 
+Known issue (2026-11-01, real presses, in use after a reboot): an unlocked triple sometimes opens the chosen app and then the camera comes up over it. Not yet traced in the log. The likely cause is a race: press 2's camera launch goes through SystemUI, which can start the camera after press 3 has already opened the app. Left as is for now. Phase 6's clean launch avoids it, because the camera activity never starts (plan §3.7, §7).
+
 ## Config app (manual, every release)
 
 Run with `adb logcat -s Sidearm` open, since each config change the hook takes is logged there. Results are from CP3A.261005.005 with Vector 2.2, on 2026-11-01 (✅ passed, ⏳ not yet tested).
@@ -45,12 +47,12 @@ Run with `adb logcat -s Sidearm` open, since each config change the hook takes i
 | `XposedProvider` log on opening | `binder received`; no "Ignored a call from uid" line from `Sidearm` | ✅ Vector calls as uid 1000 |
 | Turn **Triple press** off, then on | The hook logs each change at once, with no reboot; a triple press does nothing new while off | ✅ both logged live |
 | Choose another app in the picker, then triple-press | The hook logs the new target, and the new app opens | ✅ real presses, unlocked |
-| Search the picker by name and by package | Only matching apps are listed | ⏳ |
-| Set double-press to Wallet in Settings, come back | Status card "Paused"; "Open gesture settings" opens the double-press page | ⏳ |
-| Uninstall or disable the chosen app | Status card "App not found", with "Choose app" | ⏳ |
-| Disable Sidearm in the Vector manager, reopen the app | "Not connected" after about 3 seconds | ⏳ |
+| Search the picker by name and by package | Only matching apps are listed | ✅ both |
+| Set double-press to Wallet in Settings, come back | Status card "Paused"; "Open gesture settings" opens the double-press page | ✅ |
+| Uninstall or disable the chosen app | Status card "App not found", with "Choose app" | ✅ |
+| Disable Sidearm in the Vector manager, reopen the app | "Not connected" after about 3 seconds | ✅ "Vector hasn't connected"; re-enabling asks for a reboot, and after it everything works |
 | `adb shell dumpsys package io.github.soanssandha.sidearm` | One activity and Sidearm's provider (plus AndroidX's non-exported startup provider); no services or receivers | ✅ |
-| Rotate the screen, switch dark theme on and off | State is kept and nothing reloads visibly | ⏳ |
+| Rotate the screen, switch dark theme on and off | State is kept and nothing reloads visibly | ✅ auto-rotate on and off, dark theme on and off |
 
 ## Emergency SOS check (manual, every release and OTA)
 

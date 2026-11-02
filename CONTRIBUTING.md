@@ -121,7 +121,7 @@ To bring a branch up to date with `develop`: if it has never been pushed, rebase
 ## Versions and tags
 
 - Versions are SemVer `MAJOR.MINOR.PATCH`, set in one place: `sidearm` in `gradle/libs.versions.toml`. The release `versionCode` is derived from it (Phase 5).
-- Until 1.0.0, the minor version marks the phase: `v0.1.0` is Phase 1 (the core), `v0.2.0` Phase 2, and so on to `v0.5.0`, the first published release (Phase 5). Patch versions are hotfixes. `v1.0.0` follows the Phase 6 soak.
+- Until 1.0.0, the minor version marks the phase: `v0.1.0` is Phase 1 (the core), `v0.2.0` Phase 2, and so on to `v0.5.0`, the first published release (Phase 5). Patch versions are hotfixes. `v1.0.0` follows the Phase 7 soak.
 - From 1.0.0: a breaking change bumps major, `feat` bumps minor, and `fix` or `perf` bumps patch.
 - A release is an annotated `vX.Y.Z` tag on the merge commit of its PR into `main`. Tags are never moved or deleted; a bad release is fixed by the next patch release. The pre-push hook checks that a tag has the right format, is annotated, and is on `main`.
 - From Phase 5, pushing the tag makes CI build the signed APK and publish the GitHub Release, with notes from `CHANGELOG.md`.
