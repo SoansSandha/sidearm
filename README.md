@@ -40,7 +40,7 @@ Sidearm never changes Android's own press counting, so screen on/off and Emergen
 
 ## Setting it up
 
-1. Install the APK, enable Sidearm in the Vector manager with "System Framework" in its scope, and reboot once.
+1. Download the APK from the [Releases](https://github.com/SoansSandha/sidearm/releases) page and install it. Each release lists the APK's SHA-256 and its signing certificate's digest, which `apksigner verify --print-certs` shows. Then enable Sidearm in the Vector manager with "System Framework" in its scope, and reboot once.
 2. Open the Sidearm app. The card at the top says whether triple press is ready, and if not, what to fix. The Checks card lists each thing it needs: Vector, the scope, the module loaded in System Framework, double-press set to Camera, and an Android build it has been tested on.
 3. Turn on **Triple press** and choose an app. Changes apply straight away, with no reboot.
 
@@ -72,6 +72,8 @@ For development on a rooted test phone:
 - `bash scripts/device-smoke.sh` checks single, double and triple presses on the phone (never more than 3 presses in a row). The full device checklist, including the Emergency SOS check, is in [docs/testing.md](docs/testing.md).
 
 The first install needs Sidearm enabled in the Vector manager for "System Framework", followed by one reboot (see [Setting it up](#setting-it-up)).
+
+Release builds you make yourself (`./gradlew :app:assembleRelease`) are unsigned. GitHub Actions builds, checks and signs the published APKs ([docs/decisions/0009-sign-outside-the-build.md](docs/decisions/0009-sign-outside-the-build.md)). They use a different key from debug builds, so to switch a phone between the two, uninstall Sidearm first, then enable it in Vector again, reboot, and choose the app again.
 
 ## Project docs
 

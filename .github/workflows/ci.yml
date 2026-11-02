@@ -1,0 +1,59 @@
+# Runs on every pull request, and on pushes to develop and main. It uses pull_request, never
+# pull_request_target, so pull requests from forks run without secrets and with a read-only token
+# (.claude/rules/git-and-privacy.md §9). Nothing here signs: only release.yml does (ADR 0009).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+# An explicit shell adds pipefail, so a failure inside a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+# A newer push to a pull request cancels its older run. Pushes to develop and main each get their own
+# group, so every merged commit is checked.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  hygiene:
+    name: Hygiene
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every new commit, as the pre-push hook does: something added in one commit and deleted in the
+      # next is still in the history. A pull request is checked with its base's script, so it can't
+      # weaken the check that judges it. CI has no private denylist; the owner's hooks cover that.
+      - name: Check every new commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SCRIPT_FROM: ${{ github.event.pull_request.base.sha || github.sha }}
+          HYGIENE_ALLOW_NO_DENYLIST: "1"
+        run: |
+          check="$RUNNER_TEMP/check-repo-hygiene.sh"
+          git show "$SCRIPT_FROM:scripts/check-repo-hygiene.sh" >"$check"
+          if [[ "$BASE" =~ ^0*$ ]] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            commits="$HEAD"
+          else
+            commits="$(git rev-list "$BASE..$HEAD")"
+          fi
+          for commit in $commits; do
+            bash "$check" "$commit"
+          done
+
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml

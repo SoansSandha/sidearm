@@ -1,0 +1,52 @@
+# Checks a pull request's title and branch name against CONTRIBUTING.md, and its title and description
+# with the hygiene check: the title becomes the squash-merge commit on develop, and descriptions are
+# part of the repo too (.claude/rules/git-and-privacy.md §3). Runs again whenever either is edited.
+name: PR
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+# An explicit shell adds pipefail, so a failure inside a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    name: Title and branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # The base's scripts, so a pull request can't loosen the checks that judge it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Check the title, branch name and description
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          FROM_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          HYGIENE_ALLOW_NO_DENYLIST: "1"
+        run: |
+          printf '%s\n' "$TITLE" >"$RUNNER_TEMP/title"
+          bash scripts/check-conventions.sh --message "$RUNNER_TEMP/title"
+          # Outside contributors name their fork's branches as they like (CONTRIBUTING.md, Playbook).
+          if [ "$FROM_FORK" != true ]; then
+            bash scripts/check-conventions.sh --branch "$BRANCH"
+          fi
+          # Dependabot's descriptions quote upstream release notes, which aren't ours to police.
+          if [ "$AUTHOR" = "dependabot[bot]" ]; then BODY=""; fi
+          printf '%s\n\n%s\n' "$TITLE" "$BODY" >"$RUNNER_TEMP/message"
+          bash scripts/check-repo-hygiene.sh --message "$RUNNER_TEMP/message"

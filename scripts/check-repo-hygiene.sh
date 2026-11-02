@@ -40,7 +40,8 @@ rule credential-in-url  own - '' '[a-z]+://[^/[:space:]:@]+:[^/[:space:]@]+@'
 rule hardcoded-secret   own i '' "(password|passwd|secret|api[_-]?key|access[_-]?token)[\"' ]*[:=][[:space:]]*[\"'][^\"' ]{6,}[\"']"
 rule ip-address         own - '^(127[.]0[.]0[.]1|0[.]0[.]0[.]0|255[.]255[.]255[.]255)$' \
   '\b(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}\b'
-rule email-address      own i '(noreply|@example[.](com|org|net)$|@localhost$)' \
+# support@github.com is Dependabot's sign-off ("Signed-off-by: dependabot[bot] <support@github.com>").
+rule email-address      own i '(noreply|^support@github[.]com$|@example[.](com|org|net)$|@localhost$)' \
   '[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}'
 rule raw-logcat-line    all - '' '^[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3} +[0-9]+ +[0-9]+ [VDIWEF] '
 rule raw-getprop-output all - '' '^\[(ro|persist|sys|gsm|vendor)\.[a-z0-9._]+\]: \['
