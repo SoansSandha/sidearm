@@ -1,0 +1,193 @@
+# Publishes the GitHub Release for an existing vX.Y.Z tag. Run it by hand from main: Actions › Release
+# › Run workflow, or `gh workflow run release.yml --ref main -f tag=vX.Y.Z`. It always runs main's
+# reviewed workflow and scripts and reads the tag only as data, so a tag pushed on some other commit
+# can't change what handles the signing key. The "release" environment, which holds the key, opens
+# only to main (ADR 0009).
+#
+# Turn "publish" off to stop after signing and get the signed APK as a 3-day artifact, to try on a
+# phone first. If a run fails, fix the workflow or scripts on main and run it again for the same tag;
+# tags can't be moved.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag, such as v0.5.0. It must already be pushed, annotated and on main.
+        required: true
+        type: string
+      publish:
+        description: Publish the GitHub Release. Off stops after signing and uploads the APK as an artifact.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# An explicit shell adds pipefail, so a failure inside a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Check where this runs, and the tag's name
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Run the release workflow from main."
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Not a release tag. Release tags look like v1.2.3 (CONTRIBUTING.md)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Asks GitHub whether the tag is annotated, since a checkout can recreate tags as lightweight ones.
+      # The tag's files are read with git show; the scripts that run are main's.
+      - name: Check the tag, its version and its notes
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.type)" != tag ]; then
+            echo "::error::$TAG isn't an annotated tag on GitHub (CONTRIBUTING.md, Release)."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "refs/tags/$TAG^{commit}" origin/main; then
+            echo "::error::$TAG isn't on main. Release tags go on the merge commit of the release PR."
+            exit 1
+          fi
+          version="$(git show "refs/tags/$TAG:gradle/libs.versions.toml" | sed -n 's/^sidearm = "\(.*\)"$/\1/p')"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::$TAG doesn't match sidearm = \"$version\" in its gradle/libs.versions.toml."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/notes"
+          git show "refs/tags/$TAG:CHANGELOG.md" >"$RUNNER_TEMP/CHANGELOG.md"
+          bash scripts/release-notes.sh "$version" "$RUNNER_TEMP/CHANGELOG.md" >"$RUNNER_TEMP/notes/notes.md"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes/notes.md
+          if-no-files-found: error
+          retention-days: 3
+
+  build:
+    name: Build
+    needs: verify
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: refs/tags/${{ inputs.tag }}
+      use-cache: false
+
+  publish:
+    name: Sign and publish
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag }}
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sidearm-unsigned
+          path: ${{ runner.temp }}/unsigned
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes
+
+      # The same build-tools as build.yml, rather than whatever the runner image has.
+      - name: Install build-tools
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;36.0.0" </dev/null >/dev/null
+          echo "SIDEARM_BUILD_TOOLS=$ANDROID_HOME/build-tools/36.0.0" >>"$GITHUB_ENV"
+
+      - name: Sign
+        env:
+          SIDEARM_KEYSTORE_BASE64: ${{ secrets.SIDEARM_KEYSTORE_BASE64 }}
+          SIDEARM_KEYSTORE_PASSWORD: ${{ secrets.SIDEARM_KEYSTORE_PASSWORD }}
+          SIDEARM_KEY_ALIAS: ${{ secrets.SIDEARM_KEY_ALIAS }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          bash scripts/sign-apk.sh "$RUNNER_TEMP/unsigned/app-release-unsigned.apk" \
+            "$RUNNER_TEMP/out/sidearm-$TAG.apk" | tee "$RUNNER_TEMP/cert.txt"
+
+      # The versionCode uses the same formula as build-logic's releaseVersionCode, checked independently
+      # on the real APK, so a dev versionCode or a stale version can't be published.
+      - name: Check the APK
+        run: |
+          badging="$("$SIDEARM_BUILD_TOOLS/aapt2" dump badging "$RUNNER_TEMP/out/sidearm-$TAG.apk")"
+          badging="${badging%%$'\n'*}"   # the "package:" line
+          IFS=. read -r major minor patch <<<"$VERSION"
+          code=$(((major * 100 + minor) * 100 + patch))
+          for want in "name='io.github.soanssandha.sidearm'" "versionCode='$code'" "versionName='$VERSION'"; do
+            if [[ "$badging" != *"$want"* ]]; then
+              echo "::error::The APK doesn't have $want."
+              exit 1
+            fi
+          done
+
+      - name: Publish the release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="$RUNNER_TEMP/out"
+          apk="sidearm-$TAG.apk"
+          (cd "$out" && sha256sum "$apk" >"$apk.sha256")
+          digest="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/cert.txt")"
+          if [ -z "$digest" ]; then
+            echo "::error::The signing step didn't report the certificate's digest."
+            exit 1
+          fi
+          {
+            cat "$RUNNER_TEMP/notes/notes.md"
+            echo
+            echo "---"
+            echo
+            echo "Signing certificate SHA-256: \`$digest\`. Check an APK with \`apksigner verify --print-certs\`."
+            echo "Before installing, read the [requirements and safety notes](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/README.md)."
+          } >"$out/notes.md"
+          prerelease=()
+          if [[ "$VERSION" == 0.* ]]; then prerelease=(--prerelease); fi
+          gh release create "$TAG" "$out/$apk" "$out/$apk.sha256" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --title "Sidearm $TAG" --notes-file "$out/notes.md" "${prerelease[@]}"
+
+      - name: Keep the signed APK for testing
+        if: ${{ !inputs.publish }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sidearm-signed-${{ inputs.tag }}
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+          retention-days: 3

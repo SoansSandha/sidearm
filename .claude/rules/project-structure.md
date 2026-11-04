@@ -54,10 +54,10 @@ Debug-only developer tools, such as the adb config activity, live in `app/src/de
 | Device test matrix, SOS procedure, post-OTA checklist | `docs/testing.md` |
 | Install, requirements, safety and recovery for users | `README.md` |
 | Our license; third-party licenses and notices | `LICENSE` (GPL-3.0-or-later); `THIRD_PARTY_NOTICES.md` |
-| Release notes | `CHANGELOG.md` (from Phase 5, in Keep a Changelog format) |
+| Release notes | `CHANGELOG.md`, in Keep a Changelog format; each release's section becomes its GitHub Release notes |
 | Dev and repo scripts | `scripts/*.sh`: bash, kebab-case names, a header comment with usage |
 | Git hooks | `.githooks/` |
-| CI, dependency updates, PR template | `.github/` (from Phase 5) |
+| CI, dependency updates, PR template | `.github/`: `workflows/` (`build.yml` is called by `ci.yml` and `release.yml`; `pr.yml`), `dependabot.yml`, `PULL_REQUEST_TEMPLATE.md`. Every action is pinned to a commit SHA with its version in a comment. Logic longer than a few lines goes in `scripts/` |
 | Claude config | `.claude/`: project rules outside `ecc/`, personal notes in `private/` |
 | Third-party tooling | `third_party/`, as pinned submodules |
 | Throwaway output (decompiled jars, logs, test repos) | The session scratchpad, never the repo |

@@ -1,5 +1,5 @@
 [versions]
-# The app's release version (semver). Phase 5 derives the release versionCode from it.
+# The app's release version (semver). The release versionCode is derived from it (build-logic ReleaseVersion.kt).
 sidearm = "0.1.0"
 compileSdk = "37"
 minSdk = "37"
