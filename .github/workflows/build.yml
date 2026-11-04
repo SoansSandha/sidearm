@@ -1,0 +1,82 @@
+# Checks and builds Sidearm: formatting, lint, unit tests, the coverage gate, and the release APK,
+# unsigned. Called by ci.yml and release.yml. This job never sees the signing secrets; signing
+# happens in a separate job that runs no build code (docs/decisions/0009-sign-outside-the-build.md).
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit or tag to build. Empty means the commit that triggered the run.
+        type: string
+        default: ""
+      use-cache:
+        description: Restore and save the Gradle cache. Release builds start clean, so nothing cached earlier reaches a signed APK.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# An explicit shell adds pipefail, so a failure inside a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      # The wrapper jar is the one binary in the repo, and a pull request could swap it, or point the
+      # wrapper at another download. Check that the distribution comes from Gradle, and compare the jar
+      # with the checksum Gradle publishes for that version.
+      - name: Verify the Gradle wrapper
+        run: |
+          props=gradle/wrapper/gradle-wrapper.properties
+          version="$(sed -n 's|^distributionUrl=https[\]://services\.gradle\.org/distributions/gradle-\([0-9.]*\)-bin\.zip$|\1|p' "$props")"
+          if [ -z "$version" ]; then
+            echo "::error::distributionUrl in $props must be a services.gradle.org -bin.zip."
+            exit 1
+          fi
+          expected="$(curl -fsSL "https://services.gradle.org/distributions/gradle-$version-wrapper.jar.sha256")"
+          echo "$expected  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --strict
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: ${{ inputs.use-cache && 'gradle' || '' }}
+
+      - name: Install Android SDK packages
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-37.0" "build-tools;36.0.0" </dev/null >/dev/null
+
+      - name: Check
+        run: ./gradlew check --console=plain
+
+      - name: Build the release APK
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sidearm-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports
+          path: "*/build/reports/"
+          if-no-files-found: ignore
+          retention-days: 7
