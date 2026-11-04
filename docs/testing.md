@@ -54,6 +54,16 @@ Run with `adb logcat -s Sidearm` open, since each config change the hook takes i
 | `adb shell dumpsys package io.github.soanssandha.sidearm` | One activity and Sidearm's provider (plus AndroidX's non-exported startup provider); no services or receivers | ✅ |
 | Rotate the screen, switch dark theme on and off | State is kept and nothing reloads visibly | ✅ auto-rotate on and off, dark theme on and off |
 
+## Release builds
+
+Each release is checked on the phone with its signed APK, from a Release run with "publish" off (CONTRIBUTING.md, Release), before it's published. Moving from a debug build means uninstalling it first, so the config and Vector's switch for Sidearm start over.
+
+| Release | Build, Vector | Checked | Result |
+|---|---|---|---|
+| v0.5.0 (2026-11-03) | CP3A.261005.005, Vector 2.2 | Install over adb after uninstalling the debug build; enable in Vector, restart; set up in the app; real triples; Emergency SOS check | ✅ Triples work. The hook's wake on a triple from screen off shows in Android's own log (below). SOS countdown starts and cancels. The published APK is byte-identical to the one tested (SHA-256 `e7430d5c…5712f`), because the release build is reproducible. |
+
+If `adb logcat -s Sidearm` shows nothing at all, Vector may be muting module logs: it can drop everything below error level, which leaves Sidearm's info and warning lines out. Turn its logging back on in the Vector manager. Android's own log still shows a triple from screen off, whatever Vector's setting: `PowerManagerService: Waking up from Dozing (… details=sidearm:TRIPLE_PRESS)`.
+
 ## Emergency SOS check (manual, every release and OTA)
 
 1. Settings › Safety & emergency › Emergency SOS: make sure it's on, with the countdown.
@@ -66,7 +76,7 @@ Run with `adb logcat -s Sidearm` open, since each config change the hook takes i
 ## After every monthly OTA
 
 1. Re-root, and check that Vector and Zygisk are running.
-2. `adb logcat -s Sidearm` right after boot: the module logs "Active on …". If it logs "Not installed", a target changed: check the new build's jars as `docs/hook-targets.md` describes, and fix the targets before anything else.
+2. `adb logcat -s Sidearm` right after boot: the module logs "Active on …". If it logs "Not installed", a target changed: check the new build's jars as `docs/hook-targets.md` describes, and fix the targets before anything else. If it logs nothing at all, check Vector's logging setting first (Release builds, above).
 3. Add the new build fingerprint to `docs/hook-targets.md`, with every target checked, and to `TestedBuilds` in `app/src/main/kotlin/.../data/TestedBuilds.kt`, so the config app stops warning about it.
 4. Run `bash scripts/device-smoke.sh` (dry run is fine).
 5. Do the Emergency SOS check above.
