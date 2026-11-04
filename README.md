@@ -40,7 +40,7 @@ Sidearm never changes Android's own press counting, so screen on/off and Emergen
 
 ## Setting it up
 
-1. Download the APK from the [Releases](https://github.com/SoansSandha/sidearm/releases) page and install it. Each release lists the APK's SHA-256 and its signing certificate's digest, which `apksigner verify --print-certs` shows. Then enable Sidearm in the Vector manager with "System Framework" in its scope, and reboot once.
+1. Download the APK from the [Releases](https://github.com/SoansSandha/sidearm/releases) page and install it. Each release lists the APK's SHA-256. Every release is signed with the same certificate, whose SHA-256 digest is `3dcf5c1f4c6718d48fb5ad8bce68b6967206644457fc241a113806128a71b97b`; `apksigner verify --print-certs sidearm-v<version>.apk` shows it. Then enable Sidearm in the Vector manager with "System Framework" in its scope, and reboot once.
 2. Open the Sidearm app. The card at the top says whether triple press is ready, and if not, what to fix. The Checks card lists each thing it needs: Vector, the scope, the module loaded in System Framework, double-press set to Camera, and an Android build it has been tested on.
 3. Turn on **Triple press** and choose an app. Changes apply straight away, with no reboot.
 
