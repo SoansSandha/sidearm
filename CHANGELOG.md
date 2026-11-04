@@ -6,6 +6,10 @@ Each release's section becomes the notes of its GitHub Release, so write entries
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-03
+
+The first published release. It needs a rooted Pixel 9 Pro XL on Android 17 with Vector 2.2 or newer; see the README before installing.
+
 ### Added
 
 - Triple-press the power button to open an app of your choice. From an unlocked phone the camera shows for about a tenth of a second first. From a locked phone the unlock prompt (fingerprint, face or PIN) shows first, and the app opens once you unlock.
@@ -22,5 +26,6 @@ Each release's section becomes the notes of its GitHub Release, so write entries
 
 - The press sequencer and its config, as a tested library. Not a working module yet, and not published as an APK.
 
-[Unreleased]: https://github.com/SoansSandha/sidearm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/SoansSandha/sidearm/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/SoansSandha/sidearm/compare/v0.1.0...v0.5.0
 [0.1.0]: https://github.com/SoansSandha/sidearm/tree/v0.1.0

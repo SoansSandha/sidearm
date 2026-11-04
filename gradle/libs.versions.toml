@@ -1,6 +1,6 @@
 [versions]
 # The app's release version (semver). The release versionCode is derived from it (build-logic ReleaseVersion.kt).
-sidearm = "0.1.0"
+sidearm = "0.5.0"
 compileSdk = "37"
 minSdk = "37"
 targetSdk = "37"
