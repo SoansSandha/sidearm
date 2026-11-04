@@ -87,7 +87,7 @@ The repo describes the **Pixel 9 Pro XL on Android 17** in general, never the ow
   It blocks:
   - forbidden file names and types, any binary other than the Gradle wrapper jar, and files over 1 MB
   - secret patterns
-  - raw logcat or getprop output, user home paths, MAC and IP addresses, and email addresses other than noreply and example ones (and `support@github.com`, which Dependabot signs its commits with)
+  - raw logcat or getprop output, user home paths, MAC and IP addresses, and email addresses other than noreply and example ones (and GitHub's support address, which Dependabot signs its commits with)
   - any string from `.claude/private/denylist.txt`, in file contents or file names
 
   A missing denylist is a failure, not a skip.
@@ -99,6 +99,7 @@ The repo describes the **Pixel 9 Pro XL on Android 17** in general, never the ow
 - `.claude/settings.json` makes Claude Code ask before the git and gh commands in section 1, and denies force-push and `--no-verify`. For the standing permission in section 1 to run without a prompt, it also needs the allow rule `Bash(bash scripts/start-branch.sh *)`. The owner adds that rule; Claude doesn't edit its own permissions. Those rules don't apply in `bypassPermissions` mode, so never run Claude Code in that mode in this repo.
 - Raster images (screenshots, PNG icons) are blocked. App icons must be vector drawables. Adding any binary to `ALLOWED_BINARIES` in the check needs the owner's OK.
 - If the check flags a false positive, tell the owner. Narrow the pattern or add an explicit allowance only with their OK.
+  - CI checks a pull request with its base branch's copy of the script, so a PR that loosens a pattern fails its own Hygiene check. Write the newly allowed text only into the script itself, which the check skips. Anywhere else, the old script on `main` would flag it in every commit of the next release PR.
 
 ## 8. If something slips through
 
