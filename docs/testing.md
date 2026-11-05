@@ -70,6 +70,7 @@ Each release is checked on the phone with its signed APK, from a Release run wit
 | Release | Build, Vector | Checked | Result |
 |---|---|---|---|
 | v0.5.0 (2026-11-03) | CP3A.261005.005, Vector 2.2 | Install over adb after uninstalling the debug build; enable in Vector, restart; set up in the app; real triples; Emergency SOS check | ✅ Triples work. The hook's wake on a triple from screen off shows in Android's own log (below). SOS countdown starts and cancels. The published APK is byte-identical to the one tested (SHA-256 `e7430d5c…5712f`), because the release build is reproducible. |
+| v0.6.0 (2026-11-04) | CP3A.261005.005, Vector 2.2 | The same install and setup, in the Clean mode: unlocked triples and doubles, a locked double and triple, Emergency SOS | ✅ Unlocked triples open the app with no camera (SystemUI's start held 54–84 ms after press 2); unlocked doubles open the camera at the end of the window; locked sequences as before; in SOS, presses 4 and 5 reach stock. Signed with the same certificate as v0.5.0, so v0.5.0 updates in place. |
 
 If `adb logcat -s Sidearm` shows nothing at all, Vector may be muting module logs: it can drop everything below error level, which leaves Sidearm's info and warning lines out. Turn its logging back on in the Vector manager. Android's own log still shows a triple from screen off, whatever Vector's setting: `PowerManagerService: Waking up from Dozing (… details=sidearm:TRIPLE_PRESS)`.
 
