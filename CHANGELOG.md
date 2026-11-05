@@ -6,6 +6,10 @@ Each release's section becomes the notes of its GitHub Release, so write entries
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-04
+
+Installing this over v0.5.0 keeps your settings. Coming from a debug build, uninstall Sidearm first.
+
 ### Added
 
 - A Clean launch mode, in the app's new Settings screen (⋮ › Settings). From an unlocked phone, a triple press opens your app with no camera first, and a double press opens the camera about a third of a second later than usual. Classic, today's behaviour, stays the default, and Sidearm falls back to it if an Android update breaks Clean.
@@ -34,6 +38,7 @@ The first published release. It needs a rooted Pixel 9 Pro XL on Android 17 with
 
 - The press sequencer and its config, as a tested library. Not a working module yet, and not published as an APK.
 
-[Unreleased]: https://github.com/SoansSandha/sidearm/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/SoansSandha/sidearm/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/SoansSandha/sidearm/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/SoansSandha/sidearm/compare/v0.1.0...v0.5.0
 [0.1.0]: https://github.com/SoansSandha/sidearm/tree/v0.1.0
