@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
             onEnabledChange = viewModel::setEnabled,
             onOpenPicker = viewModel::loadApps,
             onPick = viewModel::pick,
+            onLaunchModeChange = viewModel::setLaunchMode,
             onOpenGestureSettings = ::openGestureSettings,
             onOpenSource = { open(Intent(Intent.ACTION_VIEW, SOURCE_URL.toUri())) },
             onMessageShown = viewModel::messageShown,

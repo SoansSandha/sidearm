@@ -38,6 +38,7 @@ import io.github.soanssandha.sidearm.data.AppIcons
 fun MainScreen(state: MainUiState, icons: AppIcons, version: String, actions: MainActions) {
     var pickerOpen by rememberSaveable { mutableStateOf(false) }
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
     val openPicker = { pickerOpen = true }
     // Keyed on the sheet, not the tap, so a sheet restored after the process was killed loads its list too.
     LaunchedEffect(pickerOpen) {
@@ -52,22 +53,34 @@ fun MainScreen(state: MainUiState, icons: AppIcons, version: String, actions: Ma
         }
     }
 
-    Scaffold(
-        topBar = { TopBar(onAbout = { aboutOpen = true }) },
-        snackbarHost = { SnackbarHost(snackbarHost) },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            StatusCard(state, actions.onEnabledChange, onChooseApp = openPicker, actions.onOpenGestureSettings)
-            TargetCard(state, icons, onChange = openPicker)
-            ChecksCard(state)
-            PressMapCard(state)
+    // Held out here so the main screen comes back where it was after Settings.
+    val scroll = rememberScrollState()
+
+    if (settingsOpen) {
+        SettingsScreen(
+            mode = state.config?.launchMode,
+            snackbarHost = snackbarHost,
+            onLaunchModeChange = actions.onLaunchModeChange,
+            onBack = { settingsOpen = false },
+        )
+    } else {
+        Scaffold(
+            topBar = { TopBar(onSettings = { settingsOpen = true }, onAbout = { aboutOpen = true }) },
+            snackbarHost = { SnackbarHost(snackbarHost) },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(scroll)
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                StatusCard(state, actions.onEnabledChange, onChooseApp = openPicker, actions.onOpenGestureSettings)
+                TargetCard(state, icons, onChange = openPicker)
+                ChecksCard(state)
+                PressMapCard(state)
+            }
         }
     }
 
@@ -87,7 +100,7 @@ fun MainScreen(state: MainUiState, icons: AppIcons, version: String, actions: Ma
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(onAbout: () -> Unit) {
+private fun TopBar(onSettings: () -> Unit, onAbout: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text(stringResource(R.string.app_name)) },
@@ -97,6 +110,13 @@ private fun TopBar(onAbout: () -> Unit) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.more_options))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.settings)) },
+                        onClick = {
+                            menuOpen = false
+                            onSettings()
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.about)) },
                         onClick = {

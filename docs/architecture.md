@@ -58,7 +58,8 @@ All times are the key events' uptime clock.
 1. **Input thread.** PhoneWindowManager calls `interceptPowerKeyDown`. `PowerKeyDownHooker` lets stock run exactly once, then checks `mLastPowerDown == eventTime` to see whether stock counted the press. Long presses and presses in the SOS cooldown aren't counted, and they pass through untouched. When stock counts a first press, `SequenceStart` records whether the keyguard is showing. That's a cached flag, read before stock starts turning the screen off (ADR 0007).
 2. On press 2, stock calls `handleCameraGesture(false, POWER_DOUBLE_TAP)` from inside step 1. `CameraGestureHooker` reads press 2's time from `mLastPowerDown` and hands a `CameraRequested`, with press 1's lock state, to the sequencer.
    - **Locked at press 1:** when armed, it returns `true` without running the original, exactly what stock returns after a launch. Steps 3–6 follow.
-   - **Unlocked at press 1:** the original runs at once and the camera opens as in stock. Holding would make SystemUI lock the phone. If stock then counts press 3 within the window, `interceptPowerKeyDown` returns `true` and `LaunchTarget` (with no camera fallback) opens the app over the camera, as in step 6.
+   - **Unlocked at press 1, classic launch mode:** the original runs at once and the camera opens as in stock. Holding would make SystemUI lock the phone. If stock then counts press 3 within the window, `interceptPowerKeyDown` returns `true` and `LaunchTarget` (with no camera fallback) opens the app over the camera, as in step 6.
+   - **Unlocked at press 1, clean launch mode** (ADR 0010): the original also runs at once, so SystemUI keeps the phone unlocked, and the sequencer opens a 2 s watch for SystemUI's camera start (`Sequencer.startWatchUntil`) and schedules the timer as in step 3. **SystemUI's binder thread:** a few main-thread hops later SystemUI calls `startActivityAsUser`. `ActivityStartHooker` reads the watch field; when it's open, `SystemUiCameraStart` matches the call (SystemUI's package and uid, the insecure camera action, no caller thread or result target), and the sequencer holds it: the call and SystemUI's identity token go into `HeldStart` inside the sequencer's lock, and the hook returns `START_SUCCESS` without running stock. A press 3 then opens the app with the held start as its fallback, and the start is dropped; the timer replays it on the main looper as SystemUI, through the `ORIGIN` invoker. If press 3 comes before SystemUI's start, the app opens and the start is dropped when it arrives.
 3. The sequencer runs `reduce()` under its lock and releases the lock before running effects. `ScheduleTimer` posts to the main looper at `press 2 + W + G` (300 + 50 ms).
 4. **Main looper.** If the timer fires first, the held call is replayed through the `ORIGIN` invoker (skipping every hook, ours included), and the camera opens. A press 3 that stock still counts within the window then opens the app over it.
 5. **Input thread.** If stock counts press 3 first, the sequencer cancels the timer, `interceptPowerKeyDown` returns `true` (so the screen doesn't toggle), and `LaunchTarget` is posted to the main looper. If press 3 came while the device wasn't interactive, `DeviceWaker` wakes it first, with `WAKE_REASON_POWER_BUTTON`, as PhoneWindowManager does for a power press.
@@ -77,6 +78,7 @@ The launcher check queries system_server's own user (user 0), and the launch goe
 | system_server main looper | timers, launches, config changes | the sequencer lock, briefly |
 | Binder (Vector's callback) | `RemoteConfigReader` listener | Vector's listener lock → the reader's lock; it only posts the new config to the main looper |
 | Binder (SystemUI's unlock result) | `DismissCallbackBinder` | nothing; it posts the result to the main looper |
+| Binder (every app's activity start) | `ActivityStartHooker` | nothing, unless a clean sequence's watch is open and the call is SystemUI's camera start; then the sequencer lock, briefly. It runs at ActivityTaskManager's binder entry, before ActivityTaskManager takes any lock of its own |
 | "Sidearm config" (short-lived) | the first config read | the reader's lock, briefly |
 | Hot reload | `onHotReloading` | the reader's lock, then the sequencer lock, never both |
 
@@ -92,6 +94,7 @@ The launcher check queries system_server's own user (user 0), and the launch goe
 | `enabled` | Boolean | false | Feature on |
 | `target_component` | String | none | `ComponentName.flattenToString()` of the app to open |
 | `dry_run` | Boolean | false | Run the sequencer and log what it would do, but leave every press to stock |
+| `launch_mode` | String | `classic` | `classic` or `clean`: how the app opens on an unlocked phone (ADR 0010). Anything else reads as `classic`, and so does `clean` when the activity-start hook isn't installed |
 
 - Anything missing or malformed decodes to "off" (`ConfigCodec`). Vector calls the listener once per changed key, and only real changes reach the sequencer.
 - During a dry run, stock opens the camera on press 2 as usual. Timers still run, so the sequencer's state tracks a real sequence, and press 3 only logs whether the target would open.
@@ -106,6 +109,8 @@ One Compose screen, `MainActivity`, in the "status dashboard" design the owner p
 - what each press count does
 
 The app picker is a bottom sheet.
+
+**Settings.** The top bar's menu opens a Settings screen (the owner's design variant B for Phase 6), drawn in place of the main screen in the same activity; back returns to it. It holds the launch mode, Clean or Classic, each with what it does, and writes `launch_mode` through the same path as the switch, so the hook takes it live. While Clean is chosen the status card's footer says "Clean launch". The choices are disabled while Vector isn't connected.
 
 **Getting Vector's service.** When the app process starts, Vector's daemon, `vectord`, calls the app's provider and hands it the service binder. It's started as root but runs as the system uid (1000), and that's the caller the provider sees (checked on the phone with Vector 2.2).
 - libxposed ships its own exported provider for this, which takes a binder from any caller, so any app could hand Sidearm a fake service. The manifest removes it.

@@ -13,6 +13,7 @@ class ConfigCodecTest {
         assertEquals("enabled", ConfigKeys.ENABLED)
         assertEquals("target_component", ConfigKeys.TARGET_COMPONENT)
         assertEquals("dry_run", ConfigKeys.DRY_RUN)
+        assertEquals("launch_mode", ConfigKeys.LAUNCH_MODE)
     }
 
     @Test
@@ -21,9 +22,29 @@ class ConfigCodecTest {
             ConfigKeys.ENABLED to true,
             ConfigKeys.TARGET_COMPONENT to "com.example.app/.Main",
             ConfigKeys.DRY_RUN to true,
+            ConfigKeys.LAUNCH_MODE to "clean",
         )
 
-        assertEquals(Config(enabled = true, target = target, dryRun = true), ConfigCodec.decode(stored))
+        assertEquals(
+            Config(enabled = true, target = target, dryRun = true, launchMode = LaunchMode.CLEAN),
+            ConfigCodec.decode(stored),
+        )
+    }
+
+    @Test
+    fun `an unknown launch mode falls back to classic and leaves the feature armed`() {
+        listOf<Any?>("CLEAN ", "turbo", "", 1, true, null).forEach { stored ->
+            val config = ConfigCodec.decode(
+                mapOf(
+                    ConfigKeys.ENABLED to true,
+                    ConfigKeys.TARGET_COMPONENT to "com.example.app/.Main",
+                    ConfigKeys.LAUNCH_MODE to stored,
+                ),
+            )
+
+            assertEquals(LaunchMode.CLASSIC, config.launchMode, "stored $stored")
+            assertEquals(target, config.armedTarget, "stored $stored")
+        }
     }
 
     @Test
@@ -62,11 +83,17 @@ class ConfigCodecTest {
                 ConfigKeys.ENABLED to true,
                 ConfigKeys.TARGET_COMPONENT to "com.example.app/com.example.app.Main",
                 ConfigKeys.DRY_RUN to true,
+                ConfigKeys.LAUNCH_MODE to "clean",
             ),
-            ConfigCodec.encode(Config(enabled = true, target = target, dryRun = true)),
+            ConfigCodec.encode(Config(enabled = true, target = target, dryRun = true, launchMode = LaunchMode.CLEAN)),
         )
         assertEquals(
-            mapOf(ConfigKeys.ENABLED to false, ConfigKeys.TARGET_COMPONENT to null, ConfigKeys.DRY_RUN to false),
+            mapOf(
+                ConfigKeys.ENABLED to false,
+                ConfigKeys.TARGET_COMPONENT to null,
+                ConfigKeys.DRY_RUN to false,
+                ConfigKeys.LAUNCH_MODE to "classic",
+            ),
             ConfigCodec.encode(Config.DEFAULT),
         )
     }
@@ -79,6 +106,7 @@ class ConfigCodecTest {
             Config(false, target),
             Config(true, null),
             Config(true, target, dryRun = true),
+            Config(true, target, launchMode = LaunchMode.CLEAN),
         ).forEach {
             assertEquals(it, ConfigCodec.decode(ConfigCodec.encode(it)))
         }

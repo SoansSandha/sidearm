@@ -8,6 +8,7 @@ import androidx.lifecycle.lifecycleScope
 import io.github.libxposed.service.XposedService
 import io.github.soanssandha.sidearm.core.config.Config
 import io.github.soanssandha.sidearm.core.config.ConfigKeys
+import io.github.soanssandha.sidearm.core.config.LaunchMode
 import io.github.soanssandha.sidearm.core.config.TargetComponent
 import io.github.soanssandha.sidearm.data.RemoteConfigStore
 import io.github.soanssandha.sidearm.data.VectorConnection
@@ -26,7 +27,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  *         --ez enabled true --es target_component com.example.app/.MainActivity --ez dry_run true
  *
  * Extras are named after the config keys, and any that are left out keep their stored value; `--esn
- * target_component` clears the target. With no extras it reports the stored config.
+ * target_component` clears the target, and `--es launch_mode clean` (or `classic`) sets the launch mode. With no
+ * extras it reports the stored config.
  *
  * The activity is invisible and finishes as soon as it's done, so every `am start` gets a fresh one with its own
  * extras. (A second start into a task that's still open would only bring it to the front, without the extras.)
@@ -59,7 +61,7 @@ class DevConfigActivity : ComponentActivity() {
         Log.i(TAG, "$framework, scope ${service.scope}")
         Log.i(TAG, "${if (requested == stored) "Unchanged" else "Stored"}: $requested")
         "Sidearm: ${if (requested == stored) "unchanged" else "stored"}. Enabled ${requested.enabled}, dry run " +
-            "${requested.dryRun}, target ${requested.target?.packageName ?: "none"}"
+            "${requested.dryRun}, target ${requested.target?.packageName ?: "none"}, launch ${requested.launchMode.stored}"
     }.getOrElse { error ->
         Log.e(TAG, "Couldn't update the config", error)
         "Sidearm: failed. $error"
@@ -81,10 +83,14 @@ class DevConfigActivity : ComponentActivity() {
         } else {
             stored.target
         }
-        return Config(
+        val launchMode = extra<String>(extras, ConfigKeys.LAUNCH_MODE)?.let { name ->
+            requireNotNull(LaunchMode.entries.firstOrNull { it.stored == name }) { "Not a launch mode: '$name'" }
+        }
+        return stored.copy(
             enabled = extra<Boolean>(extras, ConfigKeys.ENABLED) ?: stored.enabled,
             target = target,
             dryRun = extra<Boolean>(extras, ConfigKeys.DRY_RUN) ?: stored.dryRun,
+            launchMode = launchMode ?: stored.launchMode,
         )
     }
 
