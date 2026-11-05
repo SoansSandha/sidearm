@@ -6,8 +6,8 @@ How Sidearm is tested, from unit tests to the checks that need a person holding 
 
 | Layer | What | Run |
 |---|---|---|
-| `:core` | Every reducer rule (`ReduceTest`, one test per row of plan §3.2) and whole press sequences on a fake clock, against a model of stock's tap counting (`ReduceTimingTest`) | `./gradlew :core:test` |
-| `:hook` | Resolvers against fixture classes that copy the framework's members (they find every target or refuse cleanly), the hookers against a fake `Chain` (stock runs exactly once; failures return stock's result), the sequencer's dry-run latch and logging, the config reader, the unlock callback | `./gradlew :hook:testDebugUnitTest` |
+| `:core` | Every reducer rule (`ReduceTest` and, for the clean launch mode, `ReduceCleanTest`: one test per row of plan §3.2) and whole press sequences on a fake clock, against a model of stock's tap counting (`ReduceTimingTest`), and with SystemUI's camera start 60 or 400 ms after press 2 in both launch modes (`ReduceCleanTimingTest`) | `./gradlew :core:test` |
+| `:hook` | Resolvers against fixture classes that copy the framework's members (they find every target or refuse cleanly), the hookers against a fake `Chain` (stock runs exactly once; failures return stock's result; the activity-start hooker passes everything through untouched while not watching), the sequencer's dry-run latch, clean watch and logging, the held start's replay as its caller, the config reader, the unlock callback | `./gradlew :hook:testDebugUnitTest` |
 | `:app` | The status card's priority order (`HeroTest`), the screen's ViewModel against fakes of Vector, the package manager and Settings (connect timeout, a binder that dies, writes that fail or race, a failing package manager), the double-press rule taken from `GestureLauncherService`, the provider's caller check, app search | `./gradlew :app:testDebugUnitTest` |
 | Everything | Formatting, lint, all unit tests, the coverage gate on `:core` | `./gradlew check` |
 
@@ -32,6 +32,13 @@ Fill it in on each release and after each OTA. ✅ passed, ⏳ not yet tested, n
 | Target app already open, unlocked | ⏳ | ⏳ | ✅ real: app comes back as it was | ⏳ | ⏳ | ⏳ manual |
 | Camera already open, unlocked | n/a | n/a | ✅ inj.: app opens over the camera | n/a | n/a | ⏳ manual |
 | During a phone call | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ manual |
+| **Clean launch mode**, screen off, locked | ✅ real: stock | ✅ real: secure camera after 350 ms, as classic | ✅ real: unlock prompt, app opens once unlocked | ⏳ | n/a | ⏳ manual |
+| **Clean**, screen on, unlocked | ✅ real: stock | ✅ real: normal camera ~350 ms later, stays unlocked | ✅ real: app opens with no camera; no camera task in recents | ⏳ | n/a | ✅ real: app opens at press 3, the countdown shows over it (as classic) |
+| **Clean**, unlocked, soon after a reboot (slow SystemUI) | n/a | ⏳ camera opens | ⏳ app opens and stays on top | n/a | n/a | n/a |
+
+Clean, 2026-11-03, on CP3A.261005.005 with Vector 2.2 and a debug build: the hook logged `clean=available`. In a dry run first, it caught SystemUI's camera start 49–57 ms after press 2 in every unlocked triple, and press 3 came 137–182 ms after press 2. Live, the start came 38–59 ms after press 2; doubles replayed it at the end of the window with no error, and triples dropped it and opened the app directly. In one of four dry-run unlocked triples Android itself took the locked path (the keyguard was showing by press 3, and SystemUI started the secure camera, which the hook doesn't match); that's stock behaviour, and clean then behaves like classic: the unlock prompt, then the app.
+
+The clean rows need `launch_mode` `clean` (Settings, or `--es launch_mode clean` on a debug build). Run them first as a dry run: the hook then logs `CameraStartRequested(time=…)` and what it would do, which shows how long SystemUI takes after press 2, while stock handles every press. If the hook logs `clean=unavailable` at boot, the clean mode reads as classic on that build, though the app still says "Clean launch".
 
 Also checked on 2026-11-01: a long press still opens the power menu (real), and `scripts/device-smoke.sh` passes. The Phase 2 dry run with real presses: about 30 sequences of 1, 2 and 3 presses, every one classified exactly as stock counted it.
 
@@ -53,6 +60,8 @@ Run with `adb logcat -s Sidearm` open, since each config change the hook takes i
 | Disable Sidearm in the Vector manager, reopen the app | "Not connected" after about 3 seconds | ✅ "Vector hasn't connected"; re-enabling asks for a reboot, and after it everything works |
 | `adb shell dumpsys package io.github.soanssandha.sidearm` | One activity and Sidearm's provider (plus AndroidX's non-exported startup provider); no services or receivers | ✅ |
 | Rotate the screen, switch dark theme on and off | State is kept and nothing reloads visibly | ✅ auto-rotate on and off, dark theme on and off |
+| ⋮ › Settings, choose Clean, then Classic | The hook logs each change at once (`launchMode=CLEAN`, then `CLASSIC`); the status card's footer says "Clean launch" only while Clean is chosen; back returns to the main screen where it was | ✅ 2026-11-03: the footer follows each switch; then a day of daily use in Clean with no problems |
+| Settings with Vector disconnected | Both choices greyed out, with the note that Vector isn't connected | ⏳ |
 
 ## Release builds
 

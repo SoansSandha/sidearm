@@ -1,9 +1,11 @@
 package io.github.soanssandha.sidearm.hook.effect
 
 import io.github.soanssandha.sidearm.core.config.Config
+import io.github.soanssandha.sidearm.core.config.LaunchMode
 import io.github.soanssandha.sidearm.core.config.TargetComponent
 import io.github.soanssandha.sidearm.core.sequencer.CameraArgs
 import io.github.soanssandha.sidearm.core.sequencer.Event
+import io.github.soanssandha.sidearm.core.sequencer.Fallback
 import io.github.soanssandha.sidearm.core.sequencer.Timing
 import io.github.soanssandha.sidearm.hook.effect.fixture.FakeEffectRunner
 import io.github.soanssandha.sidearm.hook.effect.fixture.FakeEffectRunner.Call
@@ -113,7 +115,11 @@ class SequencerTest {
         assertTrue(press(eventTime = 1_200, taps = 3))
 
         assertEquals(
-            listOf(Call.ScheduleTimer(deadline = 1_350), Call.CancelTimer, Call.LaunchTarget(target, camera)),
+            listOf(
+                Call.ScheduleTimer(deadline = 1_350),
+                Call.CancelTimer,
+                Call.LaunchTarget(target, Fallback.Camera(camera)),
+            ),
             runner.calls,
         )
     }
@@ -130,7 +136,7 @@ class SequencerTest {
                 Call.ScheduleTimer(deadline = 1_350),
                 Call.CancelTimer,
                 Call.WakeDevice,
-                Call.LaunchTarget(target, camera),
+                Call.LaunchTarget(target, Fallback.Camera(camera)),
             ),
             runner.calls,
         )
@@ -241,7 +247,7 @@ class SequencerTest {
 
         assertTrue(press(eventTime = 1_200, taps = 3))
 
-        assertEquals(Call.LaunchTarget(target, camera), runner.calls.last())
+        assertEquals(Call.LaunchTarget(target, Fallback.Camera(camera)), runner.calls.last())
         assertTrue(log.lines.any { it.startsWith("W: ") && "CancelTimer" in it }, "log: ${log.lines}")
     }
 
@@ -291,5 +297,104 @@ class SequencerTest {
             sequencer.dispatch(Event.CameraRequested(pressTime = 1_000, camera = camera, startedLocked = true)),
         )
         assertEquals(listOf<Call>(Call.ScheduleTimer(deadline = 1_350)), runner.calls)
+    }
+
+    // The clean launch mode
+
+    private val clean = live.copy(launchMode = LaunchMode.CLEAN)
+    private val start = HeldStart.Call(service = Any(), args = arrayOf("com.android.systemui"), callerIdentity = 42)
+
+    @Test
+    fun `clean reads as classic until the activity-start hook is in`() {
+        sequencer.updateConfig(clean)
+
+        assertFalse(unlockedDoublePress())
+
+        assertEquals(emptyList(), runner.calls)
+        assertEquals(Sequencer.NOT_WATCHING, sequencer.startWatchUntil)
+        assertTrue(log.lines.any { it.startsWith("W: Clean launch isn't available") }, "log: ${log.lines}")
+    }
+
+    @Test
+    fun `an unlocked double press watches for SystemUI's camera start, holds it, and runs it at the deadline`() {
+        sequencer.cleanAvailable = true
+        sequencer.updateConfig(clean)
+
+        assertFalse(unlockedDoublePress(), "the camera request goes to SystemUI at once")
+        assertEquals(3_000L, sequencer.startWatchUntil)
+        assertTrue(sequencer.dispatchStart(time = 1_080, call = start), "the start is answered without running")
+        runner.fireTimer()
+
+        assertEquals(
+            listOf(Call.ScheduleTimer(deadline = 1_350), Call.HoldStart(start), Call.RunHeldStart),
+            runner.calls,
+        )
+        assertEquals(Sequencer.NOT_WATCHING, sequencer.startWatchUntil)
+    }
+
+    @Test
+    fun `press 3 with the start held opens the target, with the held start as its fallback`() {
+        sequencer.cleanAvailable = true
+        sequencer.updateConfig(clean)
+        unlockedDoublePress()
+        sequencer.dispatchStart(time = 1_080, call = start)
+
+        assertTrue(press(eventTime = 1_200, taps = 3))
+
+        assertEquals(Call.LaunchTarget(target, Fallback.HeldStart), runner.calls.last())
+        assertEquals(Sequencer.NOT_WATCHING, sequencer.startWatchUntil)
+    }
+
+    @Test
+    fun `a start that comes after press 3 is dropped, not held`() {
+        sequencer.cleanAvailable = true
+        sequencer.updateConfig(clean)
+        unlockedDoublePress()
+        press(eventTime = 1_200, taps = 3)
+
+        assertTrue(sequencer.dispatchStart(time = 1_400, call = start), "the late start is answered without running")
+
+        assertTrue(runner.calls.none { it is Call.HoldStart }, "calls: ${runner.calls}")
+        assertEquals(Sequencer.NOT_WATCHING, sequencer.startWatchUntil)
+    }
+
+    @Test
+    fun `when press 3's target can't be opened before the start came, the start runs when it comes`() {
+        sequencer.cleanAvailable = true
+        sequencer.updateConfig(clean)
+        unlockedDoublePress()
+        press(eventTime = 1_200, taps = 3)
+        assertEquals(Call.LaunchTarget(target, Fallback.PendingStart), runner.calls.last())
+
+        checkNotNull(runner.releasePendingStart).invoke()
+
+        assertEquals(Sequencer.NOT_WATCHING, sequencer.startWatchUntil)
+        assertFalse(sequencer.dispatchStart(time = 1_400, call = start), "the late start runs")
+    }
+
+    @Test
+    fun `a dry run logs the start but lets it run`() {
+        sequencer.cleanAvailable = true
+        sequencer.updateConfig(clean.copy(dryRun = true))
+        unlockedDoublePress()
+
+        assertFalse(sequencer.dispatchStart(time = 1_080, call = start))
+
+        assertTrue(runner.calls.none { it is Call.HoldStart }, "calls: ${runner.calls}")
+        assertTrue(log.lines.any { it.startsWith("Dry run: CameraStartRequested") }, "log: ${log.lines}")
+    }
+
+    @Test
+    fun `retiring runs a held start and stops watching`() {
+        sequencer.cleanAvailable = true
+        sequencer.updateConfig(clean)
+        unlockedDoublePress()
+        sequencer.dispatchStart(time = 1_080, call = start)
+
+        sequencer.retire()
+
+        assertEquals(Call.RunHeldStart, runner.calls.last())
+        assertEquals(Sequencer.NOT_WATCHING, sequencer.startWatchUntil)
+        assertFalse(sequencer.dispatchStart(time = 1_100, call = start))
     }
 }

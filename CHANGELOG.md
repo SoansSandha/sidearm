@@ -6,6 +6,14 @@ Each release's section becomes the notes of its GitHub Release, so write entries
 
 ## [Unreleased]
 
+### Added
+
+- A Clean launch mode, in the app's new Settings screen (⋮ › Settings). From an unlocked phone, a triple press opens your app with no camera first, and a double press opens the camera about a third of a second later than usual. Classic, today's behaviour, stays the default, and Sidearm falls back to it if an Android update breaks Clean.
+
+### Fixed
+
+- In the Clean mode, the camera no longer comes up over the chosen app when the phone is slow just after a reboot.
+
 ## [0.5.0] - 2026-11-03
 
 The first published release. It needs a rooted Pixel 9 Pro XL on Android 17 with Vector 2.2 or newer; see the README before installing.

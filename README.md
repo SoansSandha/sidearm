@@ -16,8 +16,8 @@ Triple-press the power button to open an app of your choice, on a rooted Google 
 | Presses | Result |
 |---|---|
 | 1 | Screen on/off (unchanged) |
-| 2 | Camera (unchanged; from a locked phone it opens about 350 ms later) |
-| 3 | Your chosen app. From an unlocked phone the camera flashes for a moment first; from a locked phone the unlock prompt shows first. |
+| 2 | Camera (unchanged; from a locked phone, or with the Clean launch mode, it opens about 350 ms later) |
+| 3 | Your chosen app. From an unlocked phone the camera flashes for a moment first, or with the Clean launch mode not at all; from a locked phone the unlock prompt shows first. |
 | 5 | Emergency SOS (unchanged) |
 | Long press | Assistant or power menu (unchanged) |
 
@@ -27,7 +27,7 @@ Each press has to land within 300 ms of the previous one, the same window Androi
 
 Android already counts fast power presses in `GestureLauncherService`, inside system_server. Sidearm hooks that service:
 - On press 2, if the phone was locked, it holds the camera launch for one press window. If a third press arrives within that window, it cancels the camera and opens your app. If none arrives, the camera opens as usual.
-- If the phone was unlocked, it lets the camera open as usual, because holding it would lock the phone. A third press then opens your app over the camera.
+- If the phone was unlocked, it lets the camera request through as usual, because holding it would lock the phone. In the Classic launch mode (the default), a third press then opens your app over the camera. In the Clean mode, Sidearm instead holds the moment the camera app actually starts, so a third press opens your app with no camera first, and a double press opens the camera when the press window ends. If an Android update breaks the Clean mode, Sidearm falls back to Classic.
 
 Sidearm never changes Android's own press counting, so screen on/off and Emergency SOS behave exactly as stock. Details are in [docs/plan.md](docs/plan.md). The verified framework signatures for each Android build are in [docs/hook-targets.md](docs/hook-targets.md).
 
@@ -43,6 +43,7 @@ Sidearm never changes Android's own press counting, so screen on/off and Emergen
 1. Download the APK from the [Releases](https://github.com/SoansSandha/sidearm/releases) page and install it. Each release lists the APK's SHA-256. Every release is signed with the same certificate, whose SHA-256 digest is `3dcf5c1f4c6718d48fb5ad8bce68b6967206644457fc241a113806128a71b97b`; `apksigner verify --print-certs sidearm-v<version>.apk` shows it. Then enable Sidearm in the Vector manager with "System Framework" in its scope, and reboot once.
 2. Open the Sidearm app. The card at the top says whether triple press is ready, and if not, what to fix. The Checks card lists each thing it needs: Vector, the scope, the module loaded in System Framework, double-press set to Camera, and an Android build it has been tested on.
 3. Turn on **Triple press** and choose an app. Changes apply straight away, with no reboot.
+4. Optionally, in ⋮ › **Settings**, choose how the app opens from an unlocked phone: **Classic** (the camera shows for a moment first) or **Clean** (no camera; a double press opens the camera a moment later than usual).
 
 The app runs only while it's open. It has no background services, receivers or jobs.
 

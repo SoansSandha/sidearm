@@ -84,6 +84,18 @@ Checked against this build's jars on 2026-11-01. `IKeyguardDismissCallback` and 
 
 On this build SystemUI ignores `KeyguardServiceDelegate.dismissKeyguardToLaunch` (it only logs "Ignoring dismissKeyguardToLaunch"), so that member isn't used even though it exists.
 
+### Added in Phase 6
+
+Checked against this build's jars on 2026-11-03, for the clean launch mode (ADR 0010). These targets are optional: if they're missing, only the clean mode is unavailable.
+
+| Class | Member | Descriptor / value | Used for |
+|---|---|---|---|
+| `com.android.server.wm.ActivityTaskManagerService` (services.jar) | `startActivityAsUser` | `(Landroid/app/IApplicationThread;Ljava/lang/String;Ljava/lang/String;Landroid/content/Intent;Ljava/lang/String;Landroid/os/IBinder;Ljava/lang/String;IILandroid/app/ProfilerInfo;Landroid/os/Bundle;I)I`, public; `IActivityTaskManager$Stub.onTransact` calls it directly | Where SystemUI's camera start arrives, and is held, dropped or replayed |
+| `com.android.server.wm.ActivityTaskManagerService` | `mContext` | `Landroid/content/Context;` | Looking up SystemUI's uid, once |
+| `android.app.ActivityManager` (framework.jar) | `START_SUCCESS` | `I`, `0`; hidden API, which system_server may use | What a held or dropped start returns |
+
+SystemUI's camera start on a power double-press (source, not checked in the device's SystemUI APK): `startActivityAsUser` with caller `null`, calling package `com.android.systemui`, action `android.media.action.STILL_IMAGE_CAMERA`, result target `null`, from SystemUI's main thread, its result ignored. On a locked phone it uses `STILL_IMAGE_CAMERA_SECURE`, which the hook doesn't match.
+
 ### What the hook logs
 
 While the feature is armed, it logs every press stock counted and every sequencer decision; a dry run marks its decisions and only checks the target. While it's off, it logs nothing per press. Read a device's double-press and SOS settings from Settings, not from here.

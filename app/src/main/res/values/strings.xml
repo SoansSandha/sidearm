@@ -4,7 +4,20 @@
 
     <!-- Top app bar -->
     <string name="more_options">More options</string>
+    <string name="settings">Settings</string>
     <string name="about">About</string>
+    <string name="back">Back</string>
+
+    <!-- Settings -->
+    <string name="launch_mode_section">How the app opens</string>
+    <string name="launch_mode_clean">Clean</string>
+    <string name="launch_mode_new">New</string>
+    <string name="launch_mode_clean_summary">Your app opens with no camera first. A double press opens the camera about a third of a second later than usual.</string>
+    <string name="launch_mode_classic">Classic</string>
+    <string name="launch_mode_classic_summary">The camera shows for a moment, then your app. A double press opens the camera at once, as usual.</string>
+    <string name="launch_mode_unavailable">Vector isn\'t connected, so this can\'t be changed right now.</string>
+    <string name="launch_mode_locked_note">On a locked phone both work the same way: the unlock prompt first, then your app.</string>
+    <string name="launch_mode_fallback_note">Clean relies on more of Android\'s internals. If an update changes them, Sidearm uses Classic until it\'s updated. If Clean ever misbehaves, switch back here.</string>
 
     <!-- Status card -->
     <string name="triple_press">Triple press</string>
@@ -41,6 +54,7 @@
     <string name="hero_untested_build">Sidearm hasn\'t been tested on build %1$s. If triple press does nothing, it has turned itself off on this build.</string>
     <string name="hero_framework">%1$s %2$s · API %3$d</string>
     <string name="hero_framework_in_scope">%1$s %2$s · API %3$d · System Framework</string>
+    <string name="hero_clean_launch">%1$s · Clean launch</string>
     <string name="choose_app">Choose app</string>
     <string name="open_gesture_settings">Open gesture settings</string>
 

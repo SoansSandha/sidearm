@@ -19,6 +19,18 @@ sealed interface Effect {
     /** Run the held `handleCameraGesture` call now. */
     data class RunHeldCamera(val camera: CameraArgs) : Effect
 
+    /** `startActivityAsUser`: keep SystemUI's camera start and return success, as if the camera had started. */
+    data object HoldStart : Effect
+
+    /** `startActivityAsUser`: run the original now. */
+    data object RunStartNow : Effect
+
+    /** `startActivityAsUser`: return success without starting the camera; press 3 has opened the target instead. */
+    data object DropStart : Effect
+
+    /** Run the held camera start now, as SystemUI. */
+    data object RunHeldStart : Effect
+
     /** `interceptPowerKeyDown`: return true, so PhoneWindowManager consumes the press. */
     data object ConsumePress : Effect
 
@@ -27,7 +39,7 @@ sealed interface Effect {
 
     /**
      * Open [target] (through the unlock prompt if the keyguard is showing). If it can't be opened, run the [fallback]
-     * camera instead; there's none when the camera has already run.
+     * instead; there's none when the camera has already run, or its start is still to come.
      */
-    data class LaunchTarget(val target: TargetComponent, val fallback: CameraArgs?) : Effect
+    data class LaunchTarget(val target: TargetComponent, val fallback: Fallback?) : Effect
 }

@@ -24,9 +24,9 @@ Every package starts with `io.github.soanssandha.sidearm`.
 | core | `.core.sequencer` | `State`, `Event`, `Effect`, `reduce()` |
 | core | `.core.config` | `Config`, `ConfigKeys`, `ConfigCodec` |
 | hook | `.hook` | The `SidearmModule` entry class only |
-| hook | `.hook.intercept` | One `Hooker` per hooked framework method, and the input-side state they share (`SequenceStart`) |
+| hook | `.hook.intercept` | One `Hooker` per hooked framework method, the input-side state they share (`SequenceStart`), and how a hooker recognises its call (`SystemUiCameraStart`) |
 | hook | `.hook.target` | `*Targets` classes: reflection handles per framework class, resolved once, all-or-nothing |
-| hook | `.hook.effect` | Runs the reducer and its effects: the hook-side `Sequencer` (state, lock, dry-run latch), timers, app launch, wake, keyguard, and the `HookLog` seam |
+| hook | `.hook.effect` | Runs the reducer and its effects: the hook-side `Sequencer` (state, lock, dry-run latch, clean watch), timers, app launch, held camera calls and starts, wake, keyguard, and the `HookLog` and `CallerIdentity` seams |
 | hook | `.hook.config` | Reads remote prefs into a `core.config.Config` |
 | app | (root) | `Application` and `Activity` |
 | app | `.ui` | Screens, components, theme, and the screen's ViewModel and UI state |

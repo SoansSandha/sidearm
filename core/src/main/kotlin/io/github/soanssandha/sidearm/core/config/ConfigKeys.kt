@@ -15,4 +15,7 @@ object ConfigKeys {
 
     /** See [Config.dryRun]. */
     const val DRY_RUN = "dry_run"
+
+    /** A [LaunchMode.stored] value. */
+    const val LAUNCH_MODE = "launch_mode"
 }

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.soanssandha.sidearm.core.config.Config
+import io.github.soanssandha.sidearm.core.config.LaunchMode
 import io.github.soanssandha.sidearm.core.config.TargetComponent
 import io.github.soanssandha.sidearm.data.AndroidDeviceChecks
 import io.github.soanssandha.sidearm.data.AppCatalog
@@ -79,6 +80,8 @@ class MainViewModel(
     fun setEnabled(enabled: Boolean) = store { it.copy(enabled = enabled) }
 
     fun pick(app: LauncherApp) = store { it.copy(target = app.component) }
+
+    fun setLaunchMode(mode: LaunchMode) = store { it.copy(launchMode = mode) }
 
     /** Loads the launcher apps for the picker. */
     fun loadApps() {
