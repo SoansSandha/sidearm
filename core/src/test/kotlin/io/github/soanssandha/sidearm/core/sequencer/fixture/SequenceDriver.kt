@@ -16,6 +16,10 @@ import io.github.soanssandha.sidearm.core.sequencer.reduce
  *
  * With [cancelledTimersStillFire], a cancelled timer is delivered anyway, as when the handler had already picked it
  * up before the cancel landed. [startedLocked] is what the hook reports with each camera request.
+ *
+ * With [systemUiStartDelayMs], a camera request that reaches SystemUI isn't the camera opening yet: SystemUI starts
+ * the camera activity that many ms later, and that start goes through the hook's gate as in system_server
+ * ([State.startWatchUntil]). Without it, the camera counts as open the moment its request runs.
  */
 class SequenceDriver(
     private var config: Config,
@@ -23,9 +27,11 @@ class SequenceDriver(
     private val cameraDoublePress: Boolean = true,
     private val cancelledTimersStillFire: Boolean = false,
     private val startedLocked: Boolean = true,
+    private val systemUiStartDelayMs: Long? = null,
 ) {
     private val stock = StockTapCounter(timing.windowMs)
     private val pendingTimers = mutableMapOf<Long, Long>()
+    private val pendingStarts = mutableListOf<Long>()
     private val recorded = mutableListOf<Outcome>()
     private var state: State = State.INITIAL
     private var now = 0L
@@ -53,16 +59,45 @@ class SequenceDriver(
         dispatch(Event.Released)
     }
 
+    /** Runs the timers and SystemUI camera starts due by [time], earliest first (a timer first on a tie). */
     fun advanceTo(time: Long) {
         require(time >= now) { "Time went backwards: $time < $now" }
         while (true) {
-            val (generation, deadline) = pendingTimers.entries.minByOrNull { it.value } ?: break
-            if (deadline > time) break
-            pendingTimers.remove(generation)
-            now = deadline
-            dispatch(Event.TimerFired(generation))
+            val timer = pendingTimers.entries.minByOrNull { it.value }?.takeIf { it.value <= time }
+            val start = pendingStarts.minOrNull()?.takeIf { it <= time }
+            when {
+                timer != null && (start == null || timer.value <= start) -> {
+                    pendingTimers.remove(timer.key)
+                    now = timer.value
+                    dispatch(Event.TimerFired(timer.key))
+                }
+
+                start != null -> {
+                    pendingStarts.remove(start)
+                    now = start
+                    deliverStart(start)
+                }
+
+                else -> break
+            }
         }
         now = time
+    }
+
+    /** SystemUI's camera start reaches ActivityTaskManager: the hook reports it only while the state watches. */
+    private fun deliverStart(at: Long) {
+        val watchUntil = state.startWatchUntil(timing)
+        if (watchUntil != null && at <= watchUntil) {
+            dispatch(Event.CameraStartRequested(at))
+        } else {
+            recorded += Outcome.CameraOpened(at)
+        }
+    }
+
+    /** A camera request reached SystemUI. */
+    private fun cameraRequestRan() {
+        val delay = systemUiStartDelayMs
+        if (delay == null) recorded += Outcome.CameraOpened(now) else pendingStarts += now + delay
     }
 
     private fun dispatch(event: Event) {
@@ -79,7 +114,21 @@ class SequenceDriver(
 
             Effect.HoldCamera -> check(event is Event.CameraRequested) { "HoldCamera for $event" }
 
-            Effect.RunCameraNow, is Effect.RunHeldCamera -> recorded += Outcome.CameraOpened(now)
+            Effect.RunCameraNow, is Effect.RunHeldCamera -> cameraRequestRan()
+
+            Effect.HoldStart -> check(event is Event.CameraStartRequested) { "HoldStart for $event" }
+
+            Effect.RunStartNow -> {
+                check(event is Event.CameraStartRequested) { "RunStartNow for $event" }
+                recorded += Outcome.CameraOpened(event.time)
+            }
+
+            Effect.DropStart -> {
+                check(event is Event.CameraStartRequested) { "DropStart for $event" }
+                recorded += Outcome.StartDropped(event.time)
+            }
+
+            Effect.RunHeldStart -> recorded += Outcome.CameraOpened(now)
 
             Effect.ConsumePress -> {
                 check(event is Event.PowerDown) { "ConsumePress for $event" }
@@ -97,6 +146,9 @@ class SequenceDriver(
         data class TargetLaunched(val target: TargetComponent, val at: Long) : Outcome
         data class PressConsumed(val pressAt: Long) : Outcome
         data object DeviceWoken : Outcome
+
+        /** SystemUI's camera start at [at] was answered without starting the camera. */
+        data class StartDropped(val at: Long) : Outcome
     }
 
     private companion object {

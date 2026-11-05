@@ -2,6 +2,7 @@ package io.github.soanssandha.sidearm.hook
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import io.github.libxposed.api.XposedInterface.ExceptionMode
 import io.github.libxposed.api.XposedInterface.HookHandle
@@ -14,16 +15,21 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 import io.github.soanssandha.sidearm.core.config.ConfigKeys
 import io.github.soanssandha.sidearm.core.sequencer.Timing
 import io.github.soanssandha.sidearm.hook.config.RemoteConfigReader
+import io.github.soanssandha.sidearm.hook.effect.BinderCallerIdentity
 import io.github.soanssandha.sidearm.hook.effect.DeviceWaker
 import io.github.soanssandha.sidearm.hook.effect.HeldCamera
+import io.github.soanssandha.sidearm.hook.effect.HeldStart
 import io.github.soanssandha.sidearm.hook.effect.HookLog
 import io.github.soanssandha.sidearm.hook.effect.Sequencer
 import io.github.soanssandha.sidearm.hook.effect.SystemEffectRunner
 import io.github.soanssandha.sidearm.hook.effect.TargetLauncher
 import io.github.soanssandha.sidearm.hook.effect.postGuarded
+import io.github.soanssandha.sidearm.hook.intercept.ActivityStartHooker
 import io.github.soanssandha.sidearm.hook.intercept.CameraGestureHooker
 import io.github.soanssandha.sidearm.hook.intercept.PowerKeyDownHooker
 import io.github.soanssandha.sidearm.hook.intercept.SequenceStart
+import io.github.soanssandha.sidearm.hook.intercept.SystemUiCameraStart
+import io.github.soanssandha.sidearm.hook.target.ActivityTaskManagerTargets
 import io.github.soanssandha.sidearm.hook.target.GestureLauncherTargets
 import io.github.soanssandha.sidearm.hook.target.KeyguardDismissCallbackTargets
 import io.github.soanssandha.sidearm.hook.target.PhoneWindowManagerTargets
@@ -33,8 +39,11 @@ import kotlin.concurrent.thread
 
 /**
  * Sidearm's entry point in system_server. It resolves every framework target, hooks `interceptPowerKeyDown` and
- * `handleCameraGesture`, and follows the config the app stores. If any target is missing it installs nothing, and
- * the power button keeps its stock behaviour (docs/plan.md §3.5).
+ * `handleCameraGesture`, and follows the config the app stores. If any of those targets is missing it installs
+ * nothing, and the power button keeps its stock behaviour (docs/plan.md §3.5).
+ *
+ * The clean launch mode's hook on `startActivityAsUser` is installed apart from them: if it can't be, the clean mode
+ * reads as classic and everything else works as before (ADR 0010).
  */
 class SidearmModule : XposedModule() {
 
@@ -92,27 +101,31 @@ class SidearmModule : XposedModule() {
                 windowManager = PhoneWindowManagerTargets.resolve(classLoader).getOrThrow(),
                 dismissCallback = KeyguardDismissCallbackTargets.resolve(classLoader).getOrThrow(),
                 power = PowerManagerTargets.resolve().getOrThrow(),
+                // Optional: without it only the clean launch mode is missing (ADR 0010).
+                activityTaskManager = ActivityTaskManagerTargets.resolve(classLoader)
+                    .onFailure { hookLog.warn("Clean launch unavailable: activity-start target not found", it) }
+                    .getOrNull(),
             )
             val gestureLauncher = targets.gestureLauncher
             val next = build(targets)
             built = next
             val specs = hookSpecs(targets, next)
-            specs.forEach { spec ->
-                installed += oldById[spec.id]?.replaceHook(spec.hooker)
-                    ?: hook(spec.method)
-                        .setId(spec.id)
-                        .setExceptionMode(ExceptionMode.PROTECTIVE)
-                        .intercept(spec.hooker)
-            }
-            val specIds = specs.map(HookSpec::id).toSet()
-            unhookAll(oldHandles.filter { it.id !in specIds })
+            specs.forEach { spec -> installed += hookOrSwap(spec, oldById) }
+            val cleanSpec = activityStartSpec(targets, next)
+            val clean = cleanSpec != null && runCatching { installed += hookOrSwap(cleanSpec, oldById) }
+                .onFailure { hookLog.warn("Clean launch unavailable: couldn't hook startActivityAsUser", it) }
+                .isSuccess
+            next.sequencer.cleanAvailable = clean
+            val keptIds = specs.map(HookSpec::id).toSet() + listOfNotNull(cleanSpec?.id?.takeIf { clean })
+            unhookAll(oldHandles.filter { it.id !in keptIds })
             // ART may have inlined handleCameraGesture into its caller; force the call through the hook.
             if (!deoptimize(gestureLauncher.interceptPowerKeyDown)) {
                 hookLog.warn("interceptPowerKeyDown not deoptimized; an inlined camera call would skip the hook")
             }
             runtime = next
             next.start()
-            "window=${gestureLauncher.doubleTapWindowMs}ms powerSource=${gestureLauncher.powerDoubleTapSource}"
+            "window=${gestureLauncher.doubleTapWindowMs}ms powerSource=${gestureLauncher.powerDoubleTapSource} " +
+                "clean=${if (clean) "available" else "unavailable"}"
         }.onSuccess { details ->
             hookLog.info(
                 "Active on $frameworkName $frameworkVersion (API $apiVersion): ${installed.size} hooks " +
@@ -132,9 +145,18 @@ class SidearmModule : XposedModule() {
         val handler = Handler(checkNotNull(Looper.getMainLooper()) { "No main looper yet" })
         val gestureLauncher = targets.gestureLauncher
         val heldCamera = HeldCamera(getInvoker(gestureLauncher.handleCameraGesture).setType(Invoker.Type.ORIGIN))
+        val heldStart = targets.activityTaskManager?.let { activityTasks ->
+            HeldStart(
+                original = getInvoker(activityTasks.startActivityAsUser).setType(Invoker.Type.ORIGIN),
+                identity = BinderCallerIdentity,
+                startSuccess = activityTasks.startSuccess,
+                log = hookLog,
+            )
+        }
         val effects = SystemEffectRunner(
             handler = handler,
             heldCamera = heldCamera,
+            heldStart = heldStart,
             launcher = TargetLauncher(
                 windowManager = targets.windowManager,
                 dismissCallback = targets.dismissCallback,
@@ -145,7 +167,14 @@ class SidearmModule : XposedModule() {
             waker = DeviceWaker(targets.windowManager, targets.power, hookLog),
             log = hookLog,
         )
-        val sequencer = Sequencer(Timing(windowMs = gestureLauncher.doubleTapWindowMs), effects, hookLog)
+        val window = gestureLauncher.doubleTapWindowMs
+        // The late-start wait must outlast the hold; stretching it keeps an unusually long window from failing
+        // the whole install over the clean mode alone.
+        val timing = Timing(
+            windowMs = window,
+            lateStartMs = maxOf(Timing.DEFAULT_LATE_START_MS, window + Timing.DEFAULT_GRACE_MS),
+        )
+        val sequencer = Sequencer(timing, effects, hookLog)
         // Vector calls the listener on a binder thread under its own lock; apply the change on the main looper.
         val config = RemoteConfigReader(openPreferences = { getRemotePreferences(ConfigKeys.GROUP) }) { config ->
             handler.postGuarded(hookLog, "Config change") {
@@ -173,6 +202,28 @@ class SidearmModule : XposedModule() {
         )
     }
 
+    /** The clean launch mode's hook on every activity start, or null when its targets weren't found. */
+    private fun activityStartSpec(targets: Targets, runtime: Runtime): HookSpec? {
+        val activityTasks = targets.activityTaskManager ?: return null
+        return HookSpec(
+            ID_ACTIVITY_START,
+            activityTasks.startActivityAsUser,
+            ActivityStartHooker(
+                sequencer = runtime.sequencer,
+                matcher = SystemUiCameraStart(activityTasks, BinderCallerIdentity),
+                identity = BinderCallerIdentity,
+                startSuccess = activityTasks.startSuccess,
+                uptimeMillis = SystemClock::uptimeMillis,
+                log = hookLog,
+            ),
+        )
+    }
+
+    /** Swaps [spec]'s hooker into the old generation's hook with the same id, or hooks its method afresh. */
+    private fun hookOrSwap(spec: HookSpec, oldById: Map<String?, HookHandle>): HookHandle =
+        oldById[spec.id]?.replaceHook(spec.hooker)
+            ?: hook(spec.method).setId(spec.id).setExceptionMode(ExceptionMode.PROTECTIVE).intercept(spec.hooker)
+
     private fun unhookAll(handles: List<HookHandle>) {
         handles.forEach { handle ->
             runCatching { handle.unhook() }.onFailure { hookLog.warn("Couldn't unhook ${handle.id}", it) }
@@ -187,6 +238,7 @@ class SidearmModule : XposedModule() {
         val windowManager: PhoneWindowManagerTargets,
         val dismissCallback: KeyguardDismissCallbackTargets,
         val power: PowerManagerTargets,
+        val activityTaskManager: ActivityTaskManagerTargets?,
     )
 
     /** One generation's live objects, started after its hooks are in and retired as a whole. */
@@ -232,6 +284,7 @@ class SidearmModule : XposedModule() {
         const val TAG = "Sidearm"
         const val ID_POWER_KEY_DOWN = "interceptPowerKeyDown"
         const val ID_CAMERA_GESTURE = "handleCameraGesture"
+        const val ID_ACTIVITY_START = "startActivityAsUser"
         const val CONFIG_ATTEMPTS = 5
         const val CONFIG_RETRY_MS = 5_000L
     }

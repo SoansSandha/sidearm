@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.soanssandha.sidearm.R
 import io.github.soanssandha.sidearm.core.config.Config
+import io.github.soanssandha.sidearm.core.config.LaunchMode
 import io.github.soanssandha.sidearm.data.DoublePress
 
 /**
@@ -254,12 +255,16 @@ private fun heroContent(hero: Hero, state: MainUiState): HeroContent {
     }
 }
 
-/** The framework, its API and, once it's in scope, System Framework: "Vector 2.2 · API 102 · System Framework". */
+/**
+ * The framework, its API, once it's in scope System Framework, and the launch mode when it isn't the default:
+ * "Vector 2.2 · API 102 · System Framework · Clean launch".
+ */
 @Composable
 private fun frameworkLine(state: MainUiState): String? {
     val framework = (state.vector as? VectorState.Connected)?.framework ?: return null
     val format = if (state.systemInScope == true) R.string.hero_framework_in_scope else R.string.hero_framework
-    return stringResource(format, framework.name, framework.shortVersion, framework.apiVersion)
+    val line = stringResource(format, framework.name, framework.shortVersion, framework.apiVersion)
+    return if (state.config?.launchMode == LaunchMode.CLEAN) stringResource(R.string.hero_clean_launch, line) else line
 }
 
 @Composable

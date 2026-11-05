@@ -147,7 +147,7 @@ class ReduceTest {
                 listOf(
                     Effect.CancelTimer(generation = 1),
                     Effect.ConsumePress,
-                    Effect.LaunchTarget(target = target, fallback = camera),
+                    Effect.LaunchTarget(target = target, fallback = Fallback.Camera(camera)),
                 ),
             ),
             reduce(holding, Event.PowerDown(eventTime = 1_200, taps = 3, interactive = true)),
@@ -161,7 +161,7 @@ class ReduceTest {
                 Effect.CancelTimer(generation = 1),
                 Effect.ConsumePress,
                 Effect.WakeDevice,
-                Effect.LaunchTarget(target = target, fallback = camera),
+                Effect.LaunchTarget(target = target, fallback = Fallback.Camera(camera)),
             ),
             reduce(holding, Event.PowerDown(eventTime = 1_200, taps = 3, interactive = false)).effects,
         )
@@ -173,7 +173,7 @@ class ReduceTest {
 
         val effects = reduce(holding, Event.PowerDown(eventTime = 1_200, taps = 3, interactive = true), changed).effects
 
-        assertEquals(Effect.LaunchTarget(target = otherTarget, fallback = camera), effects.last())
+        assertEquals(Effect.LaunchTarget(target = otherTarget, fallback = Fallback.Camera(camera)), effects.last())
     }
 
     @Test

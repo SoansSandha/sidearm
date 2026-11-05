@@ -8,6 +8,15 @@ sealed interface Event {
      */
     data class CameraRequested(val pressTime: Long, val camera: CameraArgs, val startedLocked: Boolean) : Event
 
+    /**
+     * SystemUI asked ActivityTaskManager to start the camera at uptime [time]. The hook only reports this while the
+     * state watches for it ([State.startWatchUntil]).
+     */
+    data class CameraStartRequested(val time: Long) : Event
+
+    /** Press 3's target couldn't be opened, and its fallback was [Fallback.PendingStart]. */
+    data object TargetUnavailable : Event
+
     /** A press that stock counted, with stock's consecutive tap count after counting it. */
     data class PowerDown(val eventTime: Long, val taps: Int, val interactive: Boolean) : Event
 

@@ -1,5 +1,6 @@
 package io.github.soanssandha.sidearm.ui
 
+import io.github.soanssandha.sidearm.core.config.LaunchMode
 import io.github.soanssandha.sidearm.data.LauncherApp
 
 /** What the config screen asks the activity to do. */
@@ -8,6 +9,7 @@ class MainActions(
     /** The picker is opening: load the apps it lists. */
     val onOpenPicker: () -> Unit,
     val onPick: (LauncherApp) -> Unit,
+    val onLaunchModeChange: (LaunchMode) -> Unit,
     val onOpenGestureSettings: () -> Unit,
     val onOpenSource: () -> Unit,
     val onMessageShown: () -> Unit,

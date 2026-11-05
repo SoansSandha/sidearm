@@ -1,6 +1,7 @@
 package io.github.soanssandha.sidearm.ui
 
 import io.github.soanssandha.sidearm.core.config.Config
+import io.github.soanssandha.sidearm.core.config.LaunchMode
 import io.github.soanssandha.sidearm.core.config.TargetComponent
 import io.github.soanssandha.sidearm.data.DoublePress
 import io.github.soanssandha.sidearm.data.LauncherApp
@@ -236,6 +237,21 @@ class MainViewModelTest {
         assertEquals(armed.copy(target = notes.component), host.config)
         assertEquals(notes, viewModel.state.value.targetApp)
         assertEquals(Hero.Active("Notes"), viewModel.state.value.hero)
+    }
+
+    @Test
+    fun `choosing a launch mode stores it and keeps everything else`() = runTest(dispatcher) {
+        host.config = armed.copy(dryRun = true)
+        val viewModel = viewModel()
+        hosts.value = host
+        advanceUntilIdle()
+
+        viewModel.setLaunchMode(LaunchMode.CLEAN)
+        advanceUntilIdle()
+
+        assertEquals(listOf(armed.copy(dryRun = true, launchMode = LaunchMode.CLEAN)), host.writes)
+        assertEquals(LaunchMode.CLEAN, viewModel.state.value.config?.launchMode)
+        assertEquals(Hero.DryRun("Recorder"), viewModel.state.value.hero)
     }
 
     @Test
