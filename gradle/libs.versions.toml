@@ -6,7 +6,7 @@ minSdk = "37"
 targetSdk = "37"
 # Bytecode level for every module; the build itself runs on Android Studio's bundled JBR.
 jvmTarget = "17"
-agp = "9.5.0"
+agp = "9.5.1"
 androidxActivity = "1.13.0"
 androidxCore = "1.19.1"
 androidxLifecycle = "2.11.0"
@@ -17,7 +17,7 @@ kotlinxCoroutines = "1.11.0"
 kover = "0.9.11"
 ktlint = "1.8.0"
 libxposed = "102.0.0"
-spotless = "8.10.4"
+spotless = "8.11.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
